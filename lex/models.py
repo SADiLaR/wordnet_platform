@@ -35,7 +35,7 @@ class Synset(models.Model):
     wordnet = models.ForeignKey("Wordnet", on_delete=models.PROTECT, blank=False)
     definition = models.CharField(max_length=1000, verbose_name=_("definition"))
     pos = models.ForeignKey("PartOfSpeech", on_delete=models.PROTECT, blank=False, verbose_name=_("part of speech"))
-    status = models.IntegerField(choices=Status)
+    status = models.IntegerField(choices=Status, default=Status.UNVERIFIED)
     # domain = closed list
 
     class Meta:
@@ -44,14 +44,28 @@ class Synset(models.Model):
 
 
 class Term(models.Model):
-    text = models.CharField(max_length=1000, verbose_name=_("..."))
+    text = models.CharField(max_length=1000, verbose_name=_("term"))
     synset = models.ForeignKey("Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset"))
     lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
+
+    class Meta:
+        verbose_name = _("term")
+        verbose_name_plural = _("terms")
+
+    def __str__(self):
+        return self.text
 
 
 class Example(models.Model):
     text = models.CharField(max_length=1000, verbose_name=_("example"))
     synset = models.ForeignKey("Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("Synset"))
+
+    class Meta:
+        verbose_name = _("example")
+        verbose_name_plural = _("examples")
+
+    def __str__(self):
+        return self.text
 
 
 class PartOfSpeech(models.Model):

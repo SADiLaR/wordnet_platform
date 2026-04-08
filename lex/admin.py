@@ -36,6 +36,11 @@ class SynsetAdmin(admin.ModelAdmin):
 
     inlines = [LemmaInline, ExampleInline]
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ("display_name",)
+        return super().get_readonly_fields(request, obj)
+
 
 admin.site.register(Language, LanguageAdmin)
 admin.site.register(Wordnet)

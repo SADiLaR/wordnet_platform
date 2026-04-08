@@ -48,11 +48,27 @@ class Synset(models.Model):
         verbose_name=_("part of speech"),
     )
     status = models.IntegerField(choices=Status, default=Status.UNVERIFIED)
+    display_name = models.CharField(max_length=1000, verbose_name=_("display_name"),blank=True)
     # domain = closed list
 
     class Meta:
         verbose_name = _("synset")
         verbose_name_plural = _("synsets")
+
+    def update_display_name(self):
+        lemmas = self.lemma_set.all()
+        self.display_name = ",".join([str(l) for l in lemmas])
+        self.save()
+
+    def short_display_name(self):
+        if self.display_name:
+            return f"{self.display_name}"
+        return "()"
+
+    def __str__(self):
+        if self.display_name:
+            return f"{self.display_name}: {self.definition}"
+        return f"{()}: {self.definition}"
 
 
 class Lemma(models.Model):
@@ -68,6 +84,15 @@ class Lemma(models.Model):
 
     def __str__(self):
         return self.text
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.synset.update_display_name()
+
+    def delete(self, *args, **kwargs):
+        deletion = super().delete(*args, **kwargs)
+        self.synset.update_display_name()
+        return deletion
 
 
 class Example(models.Model):
@@ -127,3 +152,8 @@ class Relation(models.Model):
                 violation_error_message=_("Relation already defined"),
             ),
         ]
+
+    def __str__(self):
+        from_display_name = self.synset_from.short_display_name()
+        to_display_name = self.synset_to.short_display_name()
+        return f"{from_display_name} --{self.type}-> {to_display_name}"

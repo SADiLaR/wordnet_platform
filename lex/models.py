@@ -1,6 +1,9 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+SYNSET_STR_MAX_LENGTH = 100
+MAX_LEMMAS = 3
+
 
 class Language(models.Model):
     iso_code = models.CharField(
@@ -48,15 +51,47 @@ class Synset(models.Model):
         verbose_name=_("part of speech"),
     )
     status = models.IntegerField(choices=Status, default=Status.UNVERIFIED)
+    display_name = models.CharField(
+        max_length=100, verbose_name=_("display_name"), blank=True
+    )
     # domain = closed list
 
     class Meta:
         verbose_name = _("synset")
         verbose_name_plural = _("synsets")
 
+    def update_display_name(self):
+        lemmas = self.lemma_set.all().order_by("text")[: MAX_LEMMAS + 1]
+
+        # we choose at most the first MAX_LEMMAS lemmas to display
+        display_lemmas = lemmas[: min(len(lemmas), MAX_LEMMAS)]
+        display_ellipsis = ", ..." if len(lemmas) > MAX_LEMMAS else ""
+        self.display_name = (
+            ", ".join([lemma.text for lemma in display_lemmas]) + display_ellipsis
+        )
+        self.save()
+
+    def short_display_name(self):
+        return self.display_name or f"({self.pk})"
+
+    def __str__(self):
+        lemma_part = self.short_display_name()
+        definition_part_max_length = (
+            SYNSET_STR_MAX_LENGTH - len(lemma_part) - len(" : ")
+        )
+        if len(self.definition) <= definition_part_max_length:
+            # we can use the whole definition
+            return f"{lemma_part} : {self.definition}"
+        else:
+            # replace excessive tokens with '...'
+            last_wanted_space = self.definition.rfind(
+                " ", 0, definition_part_max_length - len(" ...")
+            )
+            return f"{lemma_part} : {self.definition[:last_wanted_space]} ..."
+
 
 class Lemma(models.Model):
-    text = models.CharField(max_length=1000, verbose_name=_("lemma"))
+    text = models.CharField(max_length=100, verbose_name=_("lemma"))
     synset = models.ForeignKey(
         "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset")
     )
@@ -68,6 +103,16 @@ class Lemma(models.Model):
 
     def __str__(self):
         return self.text
+
+    # TODO: needs more thought
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.synset.update_display_name()
+
+    def delete(self, *args, **kwargs):
+        deletion = super().delete(*args, **kwargs)
+        self.synset.update_display_name()
+        return deletion
 
 
 class Example(models.Model):

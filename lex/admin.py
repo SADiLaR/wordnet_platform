@@ -1,7 +1,15 @@
 from django.contrib import admin
 
-from lex.models import Language, Wordnet, Synset, Lemma, Example, PartOfSpeech, RelationType, \
-    Relation
+from lex.models import (
+    Language,
+    Wordnet,
+    Synset,
+    Lemma,
+    Example,
+    PartOfSpeech,
+    RelationType,
+    Relation,
+)
 
 
 class LanguageAdmin(admin.ModelAdmin):

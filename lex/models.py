@@ -3,7 +3,12 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Language(models.Model):
-    iso_code = models.CharField(primary_key=True, max_length=10, verbose_name=_("ISO code"))
+    iso_code = models.CharField(
+        primary_key=True,
+        max_length=10,
+        verbose_name=_("ISO code"),
+        help_text=_("Language code according to ISO 639-3"),
+    )
     name = models.CharField(max_length=50, verbose_name=_("name"))
 
     class Meta:
@@ -16,7 +21,9 @@ class Language(models.Model):
 
 class Wordnet(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("name"))
-    language = models.ForeignKey("Language", on_delete=models.PROTECT, blank=False, verbose_name=_("language"))
+    language = models.ForeignKey(
+        "Language", on_delete=models.PROTECT, blank=False, verbose_name=_("language")
+    )
 
     class Meta:
         verbose_name = _("wordnet")
@@ -34,7 +41,12 @@ class Synset(models.Model):
 
     wordnet = models.ForeignKey("Wordnet", on_delete=models.PROTECT, blank=False)
     definition = models.CharField(max_length=1000, verbose_name=_("definition"))
-    pos = models.ForeignKey("PartOfSpeech", on_delete=models.PROTECT, blank=False, verbose_name=_("part of speech"))
+    pos = models.ForeignKey(
+        "PartOfSpeech",
+        on_delete=models.PROTECT,
+        blank=False,
+        verbose_name=_("part of speech"),
+    )
     status = models.IntegerField(choices=Status, default=Status.UNVERIFIED)
     # domain = closed list
 
@@ -45,7 +57,9 @@ class Synset(models.Model):
 
 class Lemma(models.Model):
     text = models.CharField(max_length=1000, verbose_name=_("lemma"))
-    synset = models.ForeignKey("Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset"))
+    synset = models.ForeignKey(
+        "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset")
+    )
     lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
 
     class Meta:
@@ -57,8 +71,14 @@ class Lemma(models.Model):
 
 
 class Example(models.Model):
-    text = models.CharField(max_length=1000, verbose_name=_("example"))
-    synset = models.ForeignKey("Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("Synset"))
+    text = models.CharField(
+        max_length=1000,
+        verbose_name=_("example"),
+        help_text=_("Example sentence showing typical usage"),
+    )
+    synset = models.ForeignKey(
+        "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("Synset")
+    )
 
     class Meta:
         verbose_name = _("example")
@@ -91,8 +111,12 @@ class RelationType(models.Model):
 
 
 class Relation(models.Model):
-    synset_from = models.ForeignKey("Synset", related_name="+", on_delete=models.CASCADE, blank=False)
-    synset_to = models.ForeignKey("Synset", related_name="+", on_delete=models.CASCADE, blank=False)
+    synset_from = models.ForeignKey(
+        "Synset", related_name="+", on_delete=models.CASCADE, blank=False
+    )
+    synset_to = models.ForeignKey(
+        "Synset", related_name="+", on_delete=models.CASCADE, blank=False
+    )
     type = models.ForeignKey("RelationType", on_delete=models.PROTECT, blank=False)
 
     class Meta:

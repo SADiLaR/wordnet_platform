@@ -43,14 +43,14 @@ class Synset(models.Model):
         verbose_name_plural = _("synsets")
 
 
-class Term(models.Model):
-    text = models.CharField(max_length=1000, verbose_name=_("term"))
+class Lemma(models.Model):
+    text = models.CharField(max_length=1000, verbose_name=_("lemma"))
     synset = models.ForeignKey("Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset"))
     lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
 
     class Meta:
-        verbose_name = _("term")
-        verbose_name_plural = _("terms")
+        verbose_name = _("lemma")
+        verbose_name_plural = _("lemmas")
 
     def __str__(self):
         return self.text

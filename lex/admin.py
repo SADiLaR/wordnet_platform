@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from lex.models import Language, Wordnet, Synset, Term, Example, PartOfSpeech, RelationType, \
+from lex.models import Language, Wordnet, Synset, Lemma, Example, PartOfSpeech, RelationType, \
     Relation
 
 
@@ -16,17 +16,17 @@ class LanguageAdmin(admin.ModelAdmin):
 
 class SynsetAdmin(admin.ModelAdmin):
     list_filter = ["wordnet", "status"]
-    search_fields = ["term__text"]
+    search_fields = ["lemma__text"]
 
-    class TermInline(admin.TabularInline):
-        model = Term
+    class LemmaInline(admin.TabularInline):
+        model = Lemma
         extra = 1
 
     class ExampleInline(admin.StackedInline):
         model = Example
         extra = 0
 
-    inlines = [TermInline, ExampleInline]
+    inlines = [LemmaInline, ExampleInline]
 
 
 admin.site.register(Language, LanguageAdmin)

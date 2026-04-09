@@ -24,6 +24,7 @@ class LanguageAdmin(admin.ModelAdmin):
 
 class SynsetAdmin(admin.ModelAdmin):
     list_filter = ["wordnet", "status"]
+    list_display = ["__str__", "pos"]
     search_fields = ["lemma__text"]
 
     class LemmaInline(admin.TabularInline):
@@ -42,9 +43,17 @@ class SynsetAdmin(admin.ModelAdmin):
         return super().get_readonly_fields(request, obj)
 
 
+class WordnetAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "language"]
+
+
+class RelationAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "synset_from","synset_to"]
+
+
 admin.site.register(Language, LanguageAdmin)
-admin.site.register(Wordnet)
+admin.site.register(Wordnet, WordnetAdmin)
 admin.site.register(Synset, SynsetAdmin)
 admin.site.register(PartOfSpeech)
 admin.site.register(RelationType)
-admin.site.register(Relation)
+admin.site.register(Relation, RelationAdmin)

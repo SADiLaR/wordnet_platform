@@ -1,5 +1,6 @@
 from django.test import TestCase
-from lex.models import Language, Wordnet, PartOfSpeech, Synset, Lemma
+
+from lex.models import Language, Lemma, PartOfSpeech, Synset, Wordnet
 
 
 class SynsetTestCase(TestCase):

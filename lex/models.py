@@ -60,20 +60,6 @@ class Synset(models.Model):
         verbose_name = _("synset")
         verbose_name_plural = _("synsets")
 
-    def update_display_name(self):
-        lemmas = self.lemma_set.all().order_by("text")[: MAX_LEMMAS + 1]
-
-        # we choose at most the first MAX_LEMMAS lemmas to display
-        display_lemmas = lemmas[: min(len(lemmas), MAX_LEMMAS)]
-        display_ellipsis = ", ..." if len(lemmas) > MAX_LEMMAS else ""
-        self.display_name = (
-            ", ".join([lemma.text for lemma in display_lemmas]) + display_ellipsis
-        )
-        self.save()
-
-    def short_display_name(self):
-        return self.display_name or f"({self.pk})"
-
     def __str__(self):
         lemma_part = self.short_display_name()
         definition_part_max_length = (
@@ -88,6 +74,20 @@ class Synset(models.Model):
                 " ", 0, definition_part_max_length - len(" ...")
             )
             return f"{lemma_part} : {self.definition[:last_wanted_space]} ..."
+
+    def update_display_name(self):
+        lemmas = self.lemma_set.all().order_by("text")[: MAX_LEMMAS + 1]
+
+        # we choose at most the first MAX_LEMMAS lemmas to display
+        display_lemmas = lemmas[: min(len(lemmas), MAX_LEMMAS)]
+        display_ellipsis = ", ..." if len(lemmas) > MAX_LEMMAS else ""
+        self.display_name = (
+            ", ".join([lemma.text for lemma in display_lemmas]) + display_ellipsis
+        )
+        self.save()
+
+    def short_display_name(self):
+        return self.display_name or f"({self.pk})"
 
 
 class Lemma(models.Model):
@@ -172,3 +172,6 @@ class Relation(models.Model):
                 violation_error_message=_("Relation already defined"),
             ),
         ]
+
+    def __str__(self):
+        return super().__str__()

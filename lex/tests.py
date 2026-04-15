@@ -130,7 +130,7 @@ class SynsetTestCase(TestCase):
         self.synset.save()
 
         self.assertEqual(
-            self.synset.__str__(),
+            str(self.synset),
             "amabizo, amagama, ibizo, ... : A unit that stands on its own according to the "
             "intuition of ...",
         )

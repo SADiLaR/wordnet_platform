@@ -25,3 +25,30 @@ jobs:
       - name: Run unit tests
         run: |
           python manage.py test
+  
+  lint-commits:
+    runs-on: ubuntu-latest
+    if: github.event.ref != 'refs/heads/master'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Get all commits on current master
+        run: git fetch origin master
+      - name: Log all commits we will analyse
+        run: git log --pretty=format:%s origin/master..HEAD
+
+      # - We use -v here, which inverts the match, because we want to output an exit status of 1 when a match _is_
+      #   found (usually 0 is for a match)
+      # - We use a -z here, which makes \0 be the line separator, because if feeding multiline text into grep, it will
+      #   exit with a status of 0 regardless of whether there is a match (so, -z makes it treat the input as one line)
+      - name: Disallow fixup commits
+        run: git log --pretty=format:%s origin/master..HEAD | grep -zv 'fixup!'
+      - name: Disallow squash commits
+        run: git log --pretty=format:%s origin/master..HEAD | grep -zv 'squash!'
+      - name: Disallow edit commits
+        run: git log --pretty=format:%s origin/master..HEAD | grep -zv 'edit!'
+      - name: Disallow drop commits
+        run: git log --pretty=format:%s origin/master..HEAD | grep -zv 'drop!'

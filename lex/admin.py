@@ -36,7 +36,21 @@ class SynsetAdmin(admin.ModelAdmin):
         model = Example
         extra = 0
 
-    inlines = [LemmaInline, ExampleInline]
+    class RelationInlineFrom(admin.TabularInline):
+        model = Relation
+        fk_name = "synset_from"
+        extra = 1
+        verbose_name = "Relation from this synset"
+        verbose_name_plural = "Relations from this synset"
+
+    class RelationInlineTo(admin.TabularInline):
+        model = Relation
+        fk_name = "synset_to"
+        extra = 1
+        verbose_name = "Relation to this synset"
+        verbose_name_plural = "Relations to this synset"
+
+    inlines = [LemmaInline, ExampleInline, RelationInlineFrom, RelationInlineTo]
 
 
 class WordnetAdmin(admin.ModelAdmin):

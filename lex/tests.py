@@ -1,6 +1,14 @@
 from django.test import TestCase
 
-from lex.models import Language, Lemma, PartOfSpeech, Synset, Wordnet
+from lex.models import (
+    Language,
+    Lemma,
+    PartOfSpeech,
+    Relation,
+    RelationType,
+    Synset,
+    Wordnet,
+)
 
 
 class SynsetTestCase(TestCase):
@@ -125,4 +133,35 @@ class SynsetTestCase(TestCase):
             self.synset.__str__(),
             "amabizo, amagama, ibizo, ... : A unit that stands on its own according to the "
             "intuition of ...",
+        )
+
+
+class RelationTestCase(TestCase):
+    def setUp(self):
+        language = Language.objects.create(iso_code="zul", name="isiZulu")
+        wordnet = Wordnet.objects.create(name="ZulUnitTest", language=language)
+        pos = PartOfSpeech.objects.create(name="noun")
+
+        self.synset_from = Synset.objects.create(
+            definition="a source synset",
+            wordnet=wordnet,
+            pos=pos,
+            display_name="source_synset",
+        )
+        self.synset_to = Synset.objects.create(
+            definition="a target synset",
+            wordnet=wordnet,
+            pos=pos,
+            display_name="target_synset",
+        )
+
+        relation_type = RelationType.objects.create(name="some_relation")
+
+        self.relation = Relation.objects.create(
+            synset_from=self.synset_from, synset_to=self.synset_to, type=relation_type
+        )
+
+    def test_str(self):
+        self.assertEqual(
+            str(self.relation), "source_synset --some_relation-> target_synset"
         )

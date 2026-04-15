@@ -1,0 +1,12 @@
+[tool.ruff]
+line-length = 88 # has to be the same as in .editorconfig
+exclude = ["migrations", ".venv"]
+
+[tool.ruff.lint]
+extend-select = [
+    "DJ", # Django - flake8-django - https://docs.astral.sh/ruff/rules/#flake8-django-dj
+    "I", # Imports - isort - https://docs.astral.sh/ruff/rules/#isort-i
+    "W", # General - pycodestyle - https://docs.astral.sh/ruff/rules/#pycodestyle-e-w
+    "F", # General - Pyflakes - https://docs.astral.sh/ruff/rules/#pyflakes-f
+    "A", # Shadowing of builtins - flake8-builtins - https://docs.astral.sh/ruff/rules/#flake8-builtins-a
+]

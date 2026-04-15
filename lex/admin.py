@@ -1,14 +1,14 @@
 from django.contrib import admin
 
 from lex.models import (
-    Language,
-    Wordnet,
-    Synset,
-    Lemma,
     Example,
+    Language,
+    Lemma,
     PartOfSpeech,
-    RelationType,
     Relation,
+    RelationType,
+    Synset,
+    Wordnet,
 )
 
 

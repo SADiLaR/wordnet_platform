@@ -22,6 +22,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Manager Check
+        run: |
+          python manage.py check
+      - name: Check no migrations need to be made
+        run: |
+          python manage.py makemigrations --check --no-input
       - name: Run unit tests
         run: |
           python manage.py test

@@ -4,7 +4,7 @@ end_of_line = lf
 indent_size = 4
 indent_style = space
 insert_final_newline = true
-max_line_length = 100
+max_line_length = 88 # has to be the same as in pyproject.toml
 trim_trailing_whitespace = true
 
 [*.html]

@@ -1,5 +1,5 @@
 [tool.ruff]
-line-length = 88
+line-length = 88 # has to be the same as in .editorconfig
 exclude = ["migrations", ".venv"]
 
 [tool.ruff.lint]

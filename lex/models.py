@@ -163,6 +163,9 @@ class Relation(models.Model):
         "Synset", related_name="+", on_delete=models.CASCADE, blank=False
     )
     type = models.ForeignKey("RelationType", on_delete=models.PROTECT, blank=False)
+    display_name = models.CharField(
+        max_length=100, verbose_name=_("display_name"), default="no_display_name"
+    )
 
     class Meta:
         constraints = [
@@ -174,4 +177,8 @@ class Relation(models.Model):
         ]
 
     def __str__(self):
-        return super().__str__()
+        return self.display_name
+
+    def save(self, *args, **kwargs):
+        self.display_name = f"{self.synset_from.display_name} --{self.type}-> {self.synset_to.display_name}"
+        super().save(*args, **kwargs)

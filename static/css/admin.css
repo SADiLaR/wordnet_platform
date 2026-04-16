@@ -70,3 +70,7 @@ a.section:link, a.section:visited {
 .module h2, .module caption, .inline-group h2 {
     color: var(--primary-white);
 }
+
+fieldset .fieldset-heading, fieldset .inline-heading, :not(.inline-related) .collapse summary {           
+    color: var(--primary-white) !important;                                                                          
+}

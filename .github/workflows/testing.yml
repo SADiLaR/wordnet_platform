@@ -24,12 +24,15 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Manager Check
         run: |
+          cd app/
           python manage.py check
       - name: Check no migrations need to be made
         run: |
+          cd app/
           python manage.py makemigrations --check --no-input
       - name: Run unit tests
         run: |
+          cd app/
           python manage.py test
   
   lint-commits:

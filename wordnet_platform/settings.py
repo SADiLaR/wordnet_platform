@@ -25,6 +25,7 @@ SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
+DEBUG_TOOLBAR = DEBUG  # to toggle separately if we want to
 
 ALLOWED_HOSTS = []
 
@@ -40,9 +41,13 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "lex",
 ]
+if DEBUG and DEBUG_TOOLBAR:
+    INSTALLED_APPS += ["debug_toolbar"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # DebugToolbarMiddleware should go here if enabled. Done below. See
+    # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#add-the-middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -50,6 +55,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+if DEBUG and DEBUG_TOOLBAR:
+    MIDDLEWARE.insert(1, "debug_toolbar.middleware.DebugToolbarMiddleware")
 
 ROOT_URLCONF = "wordnet_platform.urls"
 
@@ -83,6 +90,7 @@ DATABASES = {
     }
 }
 
+INTERNAL_IPS = ["127.0.0.1"]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

@@ -121,11 +121,15 @@ if DEBUG:
     class CIDRList(list):
         def __init__(self, addresses):
             """Create a new ip_network object for each address range provided."""
-            self.networks = [ipaddress.ip_network(address, strict=False) for address in addresses]
+            self.networks = [
+                ipaddress.ip_network(address, strict=False) for address in addresses
+            ]
 
         def __contains__(self, address):
             """Check if the given address is contained in any of the networks."""
-            return any([ipaddress.ip_address(address) in network for network in self.networks])
+            return any(
+                [ipaddress.ip_address(address) in network for network in self.networks]
+            )
 
     if host_ip:
         INTERNAL_IPS = CIDRList([f"{host_ip}/8"])

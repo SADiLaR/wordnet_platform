@@ -24,5 +24,6 @@ jobs:
           pip install ruff
       - name: Run linting tools
         run: |
+          cd app/
           ruff format --diff .
           ruff check --diff .

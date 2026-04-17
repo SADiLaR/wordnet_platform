@@ -58,6 +58,11 @@ MIDDLEWARE = [
 if DEBUG and DEBUG_TOOLBAR:
     MIDDLEWARE.insert(1, "debug_toolbar.middleware.DebugToolbarMiddleware")
 
+    def show_toolbar(request):
+        return True
+
+    DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": show_toolbar}
+
 ROOT_URLCONF = "wordnet_platform.urls"
 
 TEMPLATES = [

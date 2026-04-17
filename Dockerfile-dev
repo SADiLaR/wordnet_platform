@@ -1,0 +1,30 @@
+# A development image with extras for development.
+# Don't use in production.
+FROM python:3.12-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+SHELL ["/bin/bash", "-c"]
+
+# Set work directory
+WORKDIR /app
+
+# Install dependencies
+COPY requirements-dev.txt requirements.txt /app/
+
+RUN <<EOF
+  set -exo pipefail
+  apt-get update
+  apt-get -y upgrade
+  pip install --upgrade pip
+  pip install -r requirements-dev.txt
+  rm -rf /var/lib/apt/lists/*
+EOF
+
+# Copy project
+COPY ./app /app/
+
+# Run the application
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

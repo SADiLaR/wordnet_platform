@@ -3,7 +3,7 @@
 
 services:
   db:
-    image: postgres:16
+    image: postgres:18
     container_name: sadilar-wordnet-db
     environment:
       - POSTGRES_DB=wordnet_db

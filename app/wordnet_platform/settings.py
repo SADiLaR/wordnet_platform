@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
 import environ
@@ -18,7 +19,14 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(DEBUG=(bool, False))
-environ.Env.read_env(BASE_DIR / "test" / "env.test")
+
+TESTING = sys.argv[1:2] == ["test"]  # True for manage.py test
+if TESTING:
+    environ.Env.read_env(BASE_DIR / "local" / "env.test")
+else:
+    environ.Env.read_env(BASE_DIR / "local" / "env.dev")
+    # In production, the above fails silently on OSError, keeping existing env vars.
+    # https://django-environ.readthedocs.io/en/latest/_modules/environ/environ.html#Env.read_env
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
@@ -38,6 +46,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
     "lex",
 ]
@@ -46,6 +55,7 @@ if DEBUG and DEBUG_TOOLBAR:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     # DebugToolbarMiddleware should go here if enabled. Done below. See
     # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#add-the-middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -56,7 +66,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 if DEBUG and DEBUG_TOOLBAR:
-    MIDDLEWARE.insert(1, "debug_toolbar.middleware.DebugToolbarMiddleware")
+    MIDDLEWARE.insert(2, "debug_toolbar.middleware.DebugToolbarMiddleware")
 
 ROOT_URLCONF = "wordnet_platform.urls"
 
@@ -170,12 +180,22 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
+if DEBUG or TESTING:
+    _STATICFILES_BACKEND = "django.contrib.staticfiles.storage.StaticFilesStorage"
+else:
+    _STATICFILES_BACKEND = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 STATIC_URL = "static/"
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
 STATIC_ROOT = BASE_DIR / "static_files"
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": _STATICFILES_BACKEND,
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

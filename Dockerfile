@@ -1,5 +1,4 @@
-# A development image with extras for development.
-# Don't use in production.
+# A minimalist image usable as a base for a production deployment.
 FROM python:3.12-slim
 
 # Set environment variables
@@ -12,19 +11,20 @@ SHELL ["/bin/bash", "-c"]
 WORKDIR /app
 
 # Install dependencies
-COPY requirements-dev.txt requirements.txt /app/
+COPY requirements.txt /app/
 
 RUN <<EOF
   set -exo pipefail
   apt-get update
   apt-get -y upgrade
   pip install --upgrade pip
-  pip install -r requirements-dev.txt
+  pip install -r requirements.txt
   rm -rf /var/lib/apt/lists/*
 EOF
 
 # Copy project
+COPY ./entrypoint.sh /
 COPY ./app /app/
 
 # Run the application
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+ENTRYPOINT ["bash", "/entrypoint.sh"]

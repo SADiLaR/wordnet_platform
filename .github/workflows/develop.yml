@@ -1,0 +1,42 @@
+# https://docs.docker.com/build/ci/github-actions/push-multi-registries/
+name: docker_push_deploy_test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "master"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # 4.0.0
+      - name: Login to SADiLaR Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # 4.1.0
+        with:
+          registry: docker.sadilar.org
+          username: ${{ vars.SADILAR_DOCKER_REPOSITORY_USER }}
+          password: ${{ secrets.SADILAR_DOCKER_REPOSITORY_SECRET }}
+      - name: Build and push
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # 7.1.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            docker.sadilar.org/wordnet_platform:latest
+      # - name: Use webhook action to start deployment     
+      #   uses: joelwmale/webhook-action@cc1a66f987e1591785273fd6f9d2f7a9d8d7c9cd # 2.4.1
+      #   with:
+      #     url: https://api.bitbucket.org/2.0/repositories/team_sadilar/ansible/pipelines/
+      #     headers: '{"Authorization": "Bearer ${{ secrets.BITBUCKET_PIPELINE_SECRET }}"}'
+      #     body: '{"target": {"ref_type": "branch", "type": "pipeline_ref_target", "ref_name": "master", "selector": {"type": "custom", "pattern": "deploy_wordnet_platform_test" }   }}'

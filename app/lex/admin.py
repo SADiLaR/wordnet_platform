@@ -68,6 +68,15 @@ class SynsetAdmin(admin.ModelAdmin):
                 self.RelationInlineTo,
             ]
 
+    def render_change_form(
+        self, request, context, add=False, change=False, form_url="", obj=None
+    ):
+        if not obj or not obj.display_name:
+            context["show_save"] = False
+            context["show_save_as_new"] = False
+            context["show_save_and_add_another"] = False
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
     class LemmaInline(admin.TabularInline):
         model = Lemma
         extra = 1

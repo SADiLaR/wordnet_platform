@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from simple_history.models import HistoricalRecords
 
 SYNSET_STR_MAX_LENGTH = 100
 MAX_LEMMAS = 3
@@ -13,6 +14,7 @@ class Language(models.Model):
         help_text=_("Language code according to ISO 639-3"),
     )
     name = models.CharField(max_length=50, verbose_name=_("name"))
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = _("language")
@@ -27,6 +29,7 @@ class Wordnet(models.Model):
     language = models.ForeignKey(
         "Language", on_delete=models.PROTECT, blank=False, verbose_name=_("language")
     )
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = _("wordnet")
@@ -54,6 +57,7 @@ class Synset(models.Model):
     display_name = models.CharField(
         max_length=100, verbose_name=_("display_name"), blank=True
     )
+    history = HistoricalRecords()
     # domain = closed list
 
     class Meta:
@@ -96,6 +100,7 @@ class Lemma(models.Model):
         "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset")
     )
     lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = _("lemma")
@@ -124,6 +129,7 @@ class Example(models.Model):
     synset = models.ForeignKey(
         "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("Synset")
     )
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = _("example")
@@ -135,6 +141,7 @@ class Example(models.Model):
 
 class PartOfSpeech(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("name"))
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = _("Part of speech")
@@ -146,6 +153,7 @@ class PartOfSpeech(models.Model):
 
 class RelationType(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("name"))
+    history = HistoricalRecords()
 
     class Meta:
         verbose_name = _("Relation type")
@@ -166,6 +174,7 @@ class Relation(models.Model):
     display_name = models.CharField(
         max_length=100, verbose_name=_("display_name"), default="no_display_name"
     )
+    history = HistoricalRecords()
 
     class Meta:
         constraints = [

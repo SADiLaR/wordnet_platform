@@ -53,9 +53,12 @@ INSTALLED_APPS = [
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
     "lex",
+    "simple_history",
 ]
 if DEBUG and DEBUG_TOOLBAR:
     INSTALLED_APPS += ["debug_toolbar"]
+
+SIMPLE_HISTORY_REVERT_DISABLED = True
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -68,6 +71,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
 ]
 if DEBUG and DEBUG_TOOLBAR:
     MIDDLEWARE.insert(2, "debug_toolbar.middleware.DebugToolbarMiddleware")

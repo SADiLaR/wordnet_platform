@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
+from simple_history.admin import SimpleHistoryAdmin
 
 from lex.models import (
     Example,
@@ -37,7 +38,7 @@ class LanguageAdmin(admin.ModelAdmin):
         return super().get_readonly_fields(request, obj)
 
 
-class SynsetAdmin(admin.ModelAdmin):
+class SynsetAdmin(SimpleHistoryAdmin):
     list_filter = ["wordnet", "status"]
     list_display = ["__str__", "pos"]
     search_fields = ["lemma__text"]
@@ -122,7 +123,7 @@ class WordnetAdmin(admin.ModelAdmin):
     list_display = ["name", "language"]
 
 
-class RelationAdmin(admin.ModelAdmin):
+class RelationAdmin(SimpleHistoryAdmin):
     list_display = ["type", "synset_from", "synset_to"]
 
 

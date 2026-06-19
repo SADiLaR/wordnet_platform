@@ -2,11 +2,11 @@ from django.test import TestCase
 
 from lex.models import (
     Language,
-    Lemma,
     PartOfSpeech,
     Relation,
     RelationType,
     Synset,
+    Word,
     Wordnet,
 )
 
@@ -25,12 +25,12 @@ class SynsetTestCase(TestCase):
         self.assertEqual(self.synset.short_display_name(), f"({self.synset.pk})")
 
     def test_short_display_name_with_display_name(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
+        Word.objects.create(text="igama", synset=self.synset)
         self.synset.refresh_from_db()
         self.assertEqual(self.synset.short_display_name(), "igama")
 
-    def test_str_one_lemma_short_definition(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
+    def test_str_one_word_short_definition(self):
+        Word.objects.create(text="igama", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = "a word"
@@ -38,10 +38,10 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(str(self.synset), "igama : a word")
 
-    def test_str_three_lemmas_short_definition(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
-        Lemma.objects.create(text="amagama", synset=self.synset)
-        Lemma.objects.create(text="ibizo", synset=self.synset)
+    def test_str_three_words_short_definition(self):
+        Word.objects.create(text="igama", synset=self.synset)
+        Word.objects.create(text="amagama", synset=self.synset)
+        Word.objects.create(text="ibizo", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = "a word"
@@ -49,11 +49,11 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(str(self.synset), "amagama, ibizo, igama : a word")
 
-    def test_str_four_lemmas_short_definition(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
-        Lemma.objects.create(text="amagama", synset=self.synset)
-        Lemma.objects.create(text="ibizo", synset=self.synset)
-        Lemma.objects.create(text="amabizo", synset=self.synset)
+    def test_str_four_words_short_definition(self):
+        Word.objects.create(text="igama", synset=self.synset)
+        Word.objects.create(text="amagama", synset=self.synset)
+        Word.objects.create(text="ibizo", synset=self.synset)
+        Word.objects.create(text="amabizo", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = "a word"
@@ -61,8 +61,8 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(str(self.synset), "amabizo, amagama, ibizo, ... : a word")
 
-    def test_str_one_lemma_long_definition(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
+    def test_str_one_word_long_definition(self):
+        Word.objects.create(text="igama", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (
@@ -79,8 +79,8 @@ class SynsetTestCase(TestCase):
         )
 
     # a test for when last_wanted_space is at definition[definition_part_max_length - len(" ...")]
-    def test_str_one_lemma_long_definition_2(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
+    def test_str_one_word_long_definition_2(self):
+        Word.objects.create(text="igama", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (
@@ -96,10 +96,10 @@ class SynsetTestCase(TestCase):
             "users. Some issues ...",
         )
 
-    def test_str_three_lemmas_long_definition(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
-        Lemma.objects.create(text="amagama", synset=self.synset)
-        Lemma.objects.create(text="ibizo", synset=self.synset)
+    def test_str_three_words_long_definition(self):
+        Word.objects.create(text="igama", synset=self.synset)
+        Word.objects.create(text="amagama", synset=self.synset)
+        Word.objects.create(text="ibizo", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (
@@ -115,11 +115,11 @@ class SynsetTestCase(TestCase):
             "of language ...",
         )
 
-    def test_str_four_lemmas_long_definition(self):
-        Lemma.objects.create(text="igama", synset=self.synset)
-        Lemma.objects.create(text="amagama", synset=self.synset)
-        Lemma.objects.create(text="ibizo", synset=self.synset)
-        Lemma.objects.create(text="amabizo", synset=self.synset)
+    def test_str_four_words_long_definition(self):
+        Word.objects.create(text="igama", synset=self.synset)
+        Word.objects.create(text="amagama", synset=self.synset)
+        Word.objects.create(text="ibizo", synset=self.synset)
+        Word.objects.create(text="amabizo", synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (

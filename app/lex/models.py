@@ -5,7 +5,7 @@ from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
 
 SYNSET_STR_MAX_LENGTH = 100
-MAX_LEMMAS = 3
+MAX_WORDS = 3
 
 
 @receiver(post_create_historical_record)
@@ -65,6 +65,10 @@ class Synset(models.Model):
 
     wordnet = models.ForeignKey("Wordnet", on_delete=models.PROTECT, blank=False)
     definition = models.CharField(max_length=1000, verbose_name=_("definition"))
+    lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
+    princeton_id = models.CharField(
+        max_length=30, verbose_name=_("Princeton Wordnet ID"), blank=True
+    )
     pos = models.ForeignKey(
         "PartOfSpeech",
         on_delete=models.PROTECT,
@@ -85,53 +89,102 @@ class Synset(models.Model):
         verbose_name_plural = _("synsets")
 
     def __str__(self):
-        lemma_part = self.short_display_name()
-        definition_part_max_length = (
-            SYNSET_STR_MAX_LENGTH - len(lemma_part) - len(" : ")
-        )
+        word_part = self.short_display_name()
+        definition_part_max_length = SYNSET_STR_MAX_LENGTH - len(word_part) - len(" : ")
         if len(self.definition) <= definition_part_max_length:
             # we can use the whole definition
-            return f"{lemma_part} : {self.definition}"
+            return f"{word_part} : {self.definition}"
         else:
             # replace excessive tokens with '...'
             last_wanted_space = self.definition.rfind(
                 " ", 0, definition_part_max_length - len(" ...")
             )
-            return f"{lemma_part} : {self.definition[:last_wanted_space]} ..."
+            return f"{word_part} : {self.definition[:last_wanted_space]} ..."
 
     def update_display_name(self):
         """We use display_name to avoid making DB calls in __str__().
         No historical record is kept of this change to the synset."""
-        lemmas = self.lemma_set.all().order_by("text")[: MAX_LEMMAS + 1]
+        senses = self.sense_set.all().order_by("word__text")[: MAX_WORDS + 1]
+        words = [s.word.text for s in senses]
 
-        # we choose at most the first MAX_LEMMAS lemmas to display
-        display_lemmas = lemmas[: min(len(lemmas), MAX_LEMMAS)]
-        display_ellipsis = ", ..." if len(lemmas) > MAX_LEMMAS else ""
-        self.display_name = (
-            ", ".join([lemma.text for lemma in display_lemmas]) + display_ellipsis
-        )
+        # we choose at most the first MAX_WORDS words to display
+        display_words = words[: min(len(words), MAX_WORDS)]
+        display_ellipsis = ", ..." if len(words) > MAX_WORDS else ""
+        self.display_name = ", ".join(display_words) + display_ellipsis
         self.save_without_historical_record()
 
     def short_display_name(self):
         return self.display_name or f"({self.pk})"
 
 
-class Lemma(models.Model):
+class Word(models.Model):
     text = models.CharField(max_length=100, verbose_name=_("lemma"))
-    synset = models.ForeignKey(
-        "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("synset")
+    pos = models.ForeignKey(
+        "PartOfSpeech",
+        on_delete=models.PROTECT,
+        blank=False,
+        verbose_name=_("part of speech"),
     )
-    lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
+    language = models.ForeignKey(
+        "Language", on_delete=models.PROTECT, blank=False, verbose_name=_("language")
+    )
     history = HistoricalRecords()
 
     class Meta:
-        verbose_name = _("lemma")
-        verbose_name_plural = _("lemmas")
+        verbose_name = _("word")
+        verbose_name_plural = _("words")
+        constraints = [
+            models.UniqueConstraint(
+                # For now, we enforce the following. In future, we may
+                # want to think about changing this as we gain a better
+                # understanding of the use cases we want to support.
+                fields=("text", "language", "pos"),
+                name="unique_word",
+                violation_error_message=_("Word already defined"),
+            )
+        ]
 
     def __str__(self):
-        return self.text
+        return f"{self.text} ({self.pos.short_name})"
 
     # TODO: needs more thought
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        for sense in self.sense_set.all():
+            sense.synset.update_display_name()
+
+    def delete(self, *args, **kwargs):
+        synsets_to_update = [s.synset for s in self.sense_set.all()]
+        deletion = super().delete(*args, **kwargs)
+        for synset in synsets_to_update:
+            synset.update_display_name()
+        return deletion
+
+
+class Sense(models.Model):
+    # PROTECT here forces the user to unlink all words from a synset or
+    # all synsets from a word before deleting. Probably the right route.
+    word = models.ForeignKey(
+        "Word", on_delete=models.PROTECT, blank=False, verbose_name=_("Word")
+    )
+    synset = models.ForeignKey(
+        "Synset", on_delete=models.PROTECT, blank=False, verbose_name=_("Synset")
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("word", "synset"), name="unique_sense")
+        ]
+
+    def __str__(self):
+        # The idea is that user never looks at the representation of a sense. Since
+        # the string representation appears in admin.TabularInline, this ensures a
+        # less cluttered interface.
+        # This might have to change when looking more deeply into the modifications to
+        # the Contributions app
+        return ""
+
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         self.synset.update_display_name()
@@ -163,6 +216,7 @@ class Example(models.Model):
 
 class PartOfSpeech(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("name"))
+    short_name = models.CharField(max_length=1, verbose_name=_("short name"))
     history = HistoricalRecords()
 
     class Meta:

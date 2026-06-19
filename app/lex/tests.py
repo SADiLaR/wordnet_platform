@@ -5,6 +5,7 @@ from lex.models import (
     PartOfSpeech,
     Relation,
     RelationType,
+    Sense,
     Synset,
     Word,
     Wordnet,
@@ -13,24 +14,30 @@ from lex.models import (
 
 class SynsetTestCase(TestCase):
     def setUp(self):
-        language = Language.objects.create(iso_code="zul", name="isiZulu")
-        wordnet = Wordnet.objects.create(name="ZulUnitTest", language=language)
-        pos = PartOfSpeech.objects.create(name="noun")
+        self.language = Language.objects.create(iso_code="zul", name="isiZulu")
+        wordnet = Wordnet.objects.create(name="ZulUnitTest", language=self.language)
+        self.nounpos = PartOfSpeech.objects.create(name="noun")
 
         self.synset = Synset.objects.create(
-            definition="a test synset", wordnet=wordnet, pos=pos
+            definition="a test synset", wordnet=wordnet, pos=self.nounpos
         )
 
     def test_short_display_name_without_display_name(self):
         self.assertEqual(self.synset.short_display_name(), f"({self.synset.pk})")
 
     def test_short_display_name_with_display_name(self):
-        Word.objects.create(text="igama", synset=self.synset)
+        word = Word.objects.create(
+            text="igama", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=word, synset=self.synset)
         self.synset.refresh_from_db()
         self.assertEqual(self.synset.short_display_name(), "igama")
 
     def test_str_one_word_short_definition(self):
-        Word.objects.create(text="igama", synset=self.synset)
+        word = Word.objects.create(
+            text="igama", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=word, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = "a word"
@@ -39,9 +46,14 @@ class SynsetTestCase(TestCase):
         self.assertEqual(str(self.synset), "igama : a word")
 
     def test_str_three_words_short_definition(self):
-        Word.objects.create(text="igama", synset=self.synset)
-        Word.objects.create(text="amagama", synset=self.synset)
-        Word.objects.create(text="ibizo", synset=self.synset)
+        w1 = Word.objects.create(text="igama", pos=self.nounpos, language=self.language)
+        w2 = Word.objects.create(
+            text="amagama", pos=self.nounpos, language=self.language
+        )
+        w3 = Word.objects.create(text="ibizo", pos=self.nounpos, language=self.language)
+        Sense.objects.create(word=w1, synset=self.synset)
+        Sense.objects.create(word=w2, synset=self.synset)
+        Sense.objects.create(word=w3, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = "a word"
@@ -50,10 +62,18 @@ class SynsetTestCase(TestCase):
         self.assertEqual(str(self.synset), "amagama, ibizo, igama : a word")
 
     def test_str_four_words_short_definition(self):
-        Word.objects.create(text="igama", synset=self.synset)
-        Word.objects.create(text="amagama", synset=self.synset)
-        Word.objects.create(text="ibizo", synset=self.synset)
-        Word.objects.create(text="amabizo", synset=self.synset)
+        w1 = Word.objects.create(text="igama", pos=self.nounpos, language=self.language)
+        w2 = Word.objects.create(
+            text="amagama", pos=self.nounpos, language=self.language
+        )
+        w3 = Word.objects.create(text="ibizo", pos=self.nounpos, language=self.language)
+        w4 = Word.objects.create(
+            text="amabizo", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=w1, synset=self.synset)
+        Sense.objects.create(word=w2, synset=self.synset)
+        Sense.objects.create(word=w3, synset=self.synset)
+        Sense.objects.create(word=w4, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = "a word"
@@ -62,7 +82,10 @@ class SynsetTestCase(TestCase):
         self.assertEqual(str(self.synset), "amabizo, amagama, ibizo, ... : a word")
 
     def test_str_one_word_long_definition(self):
-        Word.objects.create(text="igama", synset=self.synset)
+        word = Word.objects.create(
+            text="igama", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=word, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (
@@ -80,7 +103,10 @@ class SynsetTestCase(TestCase):
 
     # a test for when last_wanted_space is at definition[definition_part_max_length - len(" ...")]
     def test_str_one_word_long_definition_2(self):
-        Word.objects.create(text="igama", synset=self.synset)
+        word = Word.objects.create(
+            text="igama", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=word, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (
@@ -97,9 +123,14 @@ class SynsetTestCase(TestCase):
         )
 
     def test_str_three_words_long_definition(self):
-        Word.objects.create(text="igama", synset=self.synset)
-        Word.objects.create(text="amagama", synset=self.synset)
-        Word.objects.create(text="ibizo", synset=self.synset)
+        w1 = Word.objects.create(text="igama", pos=self.nounpos, language=self.language)
+        w2 = Word.objects.create(
+            text="amagama", pos=self.nounpos, language=self.language
+        )
+        w3 = Word.objects.create(text="ibizo", pos=self.nounpos, language=self.language)
+        Sense.objects.create(word=w1, synset=self.synset)
+        Sense.objects.create(word=w2, synset=self.synset)
+        Sense.objects.create(word=w3, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (
@@ -116,10 +147,18 @@ class SynsetTestCase(TestCase):
         )
 
     def test_str_four_words_long_definition(self):
-        Word.objects.create(text="igama", synset=self.synset)
-        Word.objects.create(text="amagama", synset=self.synset)
-        Word.objects.create(text="ibizo", synset=self.synset)
-        Word.objects.create(text="amabizo", synset=self.synset)
+        w1 = Word.objects.create(text="igama", pos=self.nounpos, language=self.language)
+        w2 = Word.objects.create(
+            text="amagama", pos=self.nounpos, language=self.language
+        )
+        w3 = Word.objects.create(text="ibizo", pos=self.nounpos, language=self.language)
+        w4 = Word.objects.create(
+            text="amabizo", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=w1, synset=self.synset)
+        Sense.objects.create(word=w2, synset=self.synset)
+        Sense.objects.create(word=w3, synset=self.synset)
+        Sense.objects.create(word=w4, synset=self.synset)
         self.synset.refresh_from_db()
 
         self.synset.definition = (

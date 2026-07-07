@@ -1,0 +1,69 @@
+{% extends "admin/change_list.html" %}
+{% load i18n static admin_list %}
+
+{% if not is_popup %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; {% trans "Contribution History" %}
+</div>
+{% endblock %}
+{% endif %}
+
+{% block search %}
+{% endblock %}
+
+{% block result_list %}
+    <div class="changelist-form-container">
+    {% if edited_synsets %}
+    <div class="results">
+        <table id="result_list">
+        <thead>
+            <tr>
+            <th scope="col"><div class="text"><span>{% trans "Synset" %}</span></div></th>
+            <th scope="col"><div class="text"><span>{% trans "Wordnet" %}</span></div></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for synset in edited_synsets %}
+            <tr>
+            <td>
+                <a href="{% url 'admin:synset_contributions_view' synset.pk %}{% querystring %}">{{ synset }}</a>
+            </td>
+            <td>{{ synset.wordnet }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+    {% endif %}
+    </div>
+{% endblock %}
+
+{% block filters %}
+    <nav id="changelist-filter" aria-labelledby="changelist-filter-header">
+        <h2 id="changelist-filter-header">{% translate 'Filter' %}</h2>
+        {% include "admin/filter.html" with title="user" choices=user_choices %}
+        {% include "admin/filter.html" with title="wordnet" choices=wordnet_choices %}
+        <details open>
+        <summary> {% trans "By date" %}</summary>
+        <form method="get" style="padding: 0 15px 15px;">
+            {% if request.GET.user %}
+            <input type="hidden" name="user" value="{{ request.GET.user }}">
+            {% endif %}
+            {% if request.GET.wordnet %}
+            <input type="hidden" name="wordnet" value="{{ request.GET.wordnet }}">
+            {% endif %}
+            <div style="margin-bottom: 8px;">
+            {{ form.start_date.label_tag }}<br>
+            {{ form.start_date }}
+            </div>
+            <div style="margin-bottom: 8px;">
+            {{ form.end_date.label_tag }}<br>
+            {{ form.end_date }}
+            </div>
+            <input type="submit" value="{% trans 'Apply' %}" class="default">
+        </form>
+        </details>
+    </nav>
+{% endblock %}

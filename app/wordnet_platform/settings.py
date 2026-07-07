@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
+    "contributions",
     "lex",
     "simple_history",
 ]

@@ -1,5 +1,8 @@
 from django import forms
 from django.contrib import admin
+from django.http import HttpResponseRedirect
+from django.shortcuts import reverse
+from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
 from simple_history.admin import SimpleHistoryAdmin
 
@@ -77,6 +80,75 @@ class SynsetAdmin(SimpleHistoryAdmin):
             context["show_save_as_new"] = False
             context["show_save_and_add_another"] = False
         return super().render_change_form(request, context, add, change, form_url, obj)
+
+    def save_model(self, request, obj, form, change):
+        """We override this method to inject change reasons for synset field changes."""
+        changes = []
+        try:
+            old_synset = Synset.objects.get(pk=obj.pk)
+        except Synset.DoesNotExist:
+            changes.append(("Added synset", f"'{obj.definition}'"))
+            old_synset = None
+
+        if old_synset:
+            for changed_field in form.changed_data:
+                old_value = getattr(old_synset, changed_field)
+                new_value = getattr(obj, changed_field)
+                changes.append(
+                    (f"Changed synset's {changed_field}", f"{old_value} → {new_value}.")
+                )
+
+        if changes:
+            change_msgs = [": ".join(c) for c in changes]
+            change_reason_msg = "; ".join(change_msgs)
+            obj._change_details = change_reason_msg
+
+        return super().save_model(request, obj, form, change)
+
+    def save_formset(self, request, form, formset, change):
+        """We override this method to inject change reasons for inline changes."""
+
+        changes = []
+        for f in formset.forms:
+            # deletions
+            # f.instance._state.adding = False where f has been added to the DB
+            # See: https://docs.djangoproject.com/en/6.0/ref/models/instances/#state
+            if not f.instance._state.adding and f in formset.deleted_forms:
+                old_obj = f.instance
+                model_class = type(f.instance)
+                changes.append(f"Deleted {model_class._meta.verbose_name}: {old_obj}")
+            # changes
+            elif f.has_changed() and not f.instance._state.adding:
+                new_obj = f.instance
+                model_class = type(f.instance)
+                old_obj = model_class.objects.get(pk=new_obj.pk)
+                for c in f.changed_data:
+                    old_value = getattr(old_obj, c)
+                    new_value = getattr(new_obj, c)
+                    changes.append(
+                        f"Changed {c} of {model_class._meta.verbose_name} '{old_obj}': {old_value} → {new_value}"
+                    )
+            # additions
+            elif f.has_changed():
+                new_obj = f.instance
+                model_class = type(f.instance)
+                changes.append(f"Added {model_class._meta.verbose_name}: {new_obj}")
+
+        if changes:
+            change_reason_msg = "; ".join(changes)
+            formset.instance._change_details = change_reason_msg
+            formset.instance.save()
+
+        return super().save_formset(request, form, formset, change)
+
+    # Override Django simple-history to show custom view
+    def history_view(self, request, object_id, extra_context=None):
+        params = {"source": "synset"}
+        return HttpResponseRedirect(
+            reverse("admin:synset_contributions_view", args=[object_id])
+            + "?"
+            + urlencode(params)
+        )
 
     class LemmaInline(admin.TabularInline):
         model = Lemma

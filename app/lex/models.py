@@ -1,9 +1,27 @@
 from django.db import models
+from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
+from simple_history.signals import post_create_historical_record
 
 SYNSET_STR_MAX_LENGTH = 100
 MAX_LEMMAS = 3
+
+
+@receiver(post_create_historical_record)
+def post_create_historical_record_callback(
+    sender, instance, history_instance, **kwargs
+):
+    if hasattr(instance, "_change_details"):
+        history_instance.change_details = instance._change_details
+        history_instance.save()
+
+
+class HistoricalChangesMixin(models.Model):
+    change_details = models.TextField(blank=True, default="")
+
+    class Meta:
+        abstract = True
 
 
 class Language(models.Model):
@@ -57,7 +75,9 @@ class Synset(models.Model):
     display_name = models.CharField(
         max_length=100, verbose_name=_("display_name"), blank=True
     )
-    history = HistoricalRecords()
+    history = HistoricalRecords(
+        bases=[HistoricalChangesMixin, models.Model], excluded_fields=["display_name"]
+    )
     # domain = closed list
 
     class Meta:
@@ -80,6 +100,8 @@ class Synset(models.Model):
             return f"{lemma_part} : {self.definition[:last_wanted_space]} ..."
 
     def update_display_name(self):
+        """We use display_name to avoid making DB calls in __str__().
+        No historical record is kept of this change to the synset."""
         lemmas = self.lemma_set.all().order_by("text")[: MAX_LEMMAS + 1]
 
         # we choose at most the first MAX_LEMMAS lemmas to display
@@ -88,7 +110,7 @@ class Synset(models.Model):
         self.display_name = (
             ", ".join([lemma.text for lemma in display_lemmas]) + display_ellipsis
         )
-        self.save()
+        self.save_without_historical_record()
 
     def short_display_name(self):
         return self.display_name or f"({self.pk})"
@@ -174,7 +196,7 @@ class Relation(models.Model):
     display_name = models.CharField(
         max_length=100, verbose_name=_("display_name"), default="no_display_name"
     )
-    history = HistoricalRecords()
+    history = HistoricalRecords(excluded_fields=["display_name"])
 
     class Meta:
         constraints = [

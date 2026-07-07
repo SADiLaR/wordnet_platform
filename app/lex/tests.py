@@ -135,6 +135,12 @@ class SynsetTestCase(TestCase):
             "intuition of ...",
         )
 
+    def test_synset_change_details_recorded(self):
+        test_change_msg = "Changed synset as a test."
+        self.synset._change_details = test_change_msg
+        self.synset.save()
+        self.assertEqual(self.synset.history.latest().change_details, test_change_msg)
+
 
 class RelationTestCase(TestCase):
     def setUp(self):

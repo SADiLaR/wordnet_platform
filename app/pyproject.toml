@@ -1,6 +1,7 @@
 [tool.ruff]
 line-length = 88 # has to be the same as in .editorconfig
-exclude = ["migrations", ".venv"]
+# **/static_files is owned by root via Docker, and so causes permission errors for ruff
+exclude = ["migrations", ".venv", "**/static_files"]
 
 [tool.ruff.lint]
 extend-select = [

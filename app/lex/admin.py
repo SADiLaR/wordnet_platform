@@ -9,11 +9,12 @@ from simple_history.admin import SimpleHistoryAdmin
 from lex.models import (
     Example,
     Language,
-    Lemma,
     PartOfSpeech,
     Relation,
     RelationType,
+    Sense,
     Synset,
+    Word,
     Wordnet,
 )
 
@@ -24,6 +25,19 @@ class NoRelatedWidgetsInlineMixin:
         for field_name, field in formset.form.base_fields.items():
             if hasattr(field.widget, "can_add_related"):
                 field.widget.can_add_related = False
+                field.widget.can_change_related = False
+                field.widget.can_delete_related = False
+                if field_name == "type":
+                    field.widget.can_view_related = False
+        return formset
+
+
+# Only provides add buttons, no change or delete
+class OnlyAddWidgetsInlineMixin:
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        for field_name, field in formset.form.base_fields.items():
+            if hasattr(field.widget, "can_add_related"):
                 field.widget.can_change_related = False
                 field.widget.can_delete_related = False
                 if field_name == "type":
@@ -44,7 +58,7 @@ class LanguageAdmin(admin.ModelAdmin):
 class SynsetAdmin(SimpleHistoryAdmin):
     list_filter = ["wordnet", "status"]
     list_display = ["__str__", "pos"]
-    search_fields = ["lemma__text"]
+    search_fields = ["sense__word__text", "definition"]
     exclude = ["display_name"]
 
     def get_form(self, request, obj=None, **kwargs):
@@ -63,10 +77,10 @@ class SynsetAdmin(SimpleHistoryAdmin):
 
     def get_inlines(self, request, obj):
         if not obj or not obj.display_name:
-            return [self.LemmaInline, self.ExampleInline]
+            return [self.SenseInline, self.ExampleInline]
         else:
             return [
-                self.LemmaInline,
+                self.SenseInline,
                 self.ExampleInline,
                 self.RelationInlineFrom,
                 self.RelationInlineTo,
@@ -150,9 +164,12 @@ class SynsetAdmin(SimpleHistoryAdmin):
             + urlencode(params)
         )
 
-    class LemmaInline(admin.TabularInline):
-        model = Lemma
+    class SenseInline(OnlyAddWidgetsInlineMixin, admin.TabularInline):
+        model = Sense
+        autocomplete_fields = ["word"]
         extra = 1
+        verbose_name = _("Associated word")
+        verbose_name_plural = _("Associated words")
 
     class ExampleInline(admin.StackedInline):
         model = Example
@@ -188,7 +205,24 @@ class SynsetAdmin(SimpleHistoryAdmin):
 
         display_to.short_description = _("This synset")
 
-    inlines = [LemmaInline, ExampleInline, RelationInlineFrom, RelationInlineTo]
+    inlines = [SenseInline, ExampleInline, RelationInlineFrom, RelationInlineTo]
+
+
+# TODO : think about changing inheritance to SimpleHistoryAdmin
+class WordAdmin(admin.ModelAdmin):
+    list_filter = ["language", "pos"]
+    list_display = ["text", "pos"]
+    search_fields = ["text"]
+
+    class SenseInline(NoRelatedWidgetsInlineMixin, admin.TabularInline):
+        model = Sense
+        autocomplete_fields = ["synset"]
+        extra = 1
+        verbose_name = _("Associated synset")
+        verbose_name_plural = _("Associated synsets")
+
+    def get_inlines(self, request, obj):
+        return [self.SenseInline]
 
 
 class WordnetAdmin(admin.ModelAdmin):
@@ -202,6 +236,7 @@ class RelationAdmin(SimpleHistoryAdmin):
 admin.site.register(Language, LanguageAdmin)
 admin.site.register(Wordnet, WordnetAdmin)
 admin.site.register(Synset, SynsetAdmin)
+admin.site.register(Word, WordAdmin)
 admin.site.register(PartOfSpeech)
 admin.site.register(RelationType)
 admin.site.register(Relation, RelationAdmin)

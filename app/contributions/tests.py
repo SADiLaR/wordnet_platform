@@ -78,14 +78,14 @@ class ContributionHistoryViewTest(TestCase):
                 "synset": self.synset_a,
                 "user": self.user_a,
                 "days_ago": 30,
-                "change_details": "Added lemma: ketel",
+                "change_details": "Added word: ketel",
             },
             {
                 "id": 4,
                 "synset": self.synset_a,
                 "user": self.user_a,
                 "days_ago": 24,
-                "change_details": "Changed text of lemma 'ketel': ketel → keteltjie",
+                "change_details": "Changed text of word 'ketel': ketel → keteltjie",
             },
             {
                 "id": 5,
@@ -106,7 +106,7 @@ class ContributionHistoryViewTest(TestCase):
                 "synset": self.synset_a,
                 "user": self.user_a,
                 "days_ago": 12,
-                "change_details": "Deleted lemma: keteltjie",
+                "change_details": "Deleted word: keteltjie",
             },
             {
                 "id": 8,
@@ -127,14 +127,14 @@ class ContributionHistoryViewTest(TestCase):
                 "synset": self.synset_a,
                 "user": self.user_b,
                 "days_ago": 9,
-                "change_details": "Added lemma: waterkoker",
+                "change_details": "Added word: waterkoker",
             },
             {
                 "id": 11,
                 "synset": self.synset_a,
                 "user": self.user_a,
                 "days_ago": 7,
-                "change_details": "Changed text of lemma 'waterkoker': waterkoker → waterkokertjie",
+                "change_details": "Changed text of word 'waterkoker': waterkoker → waterkokertjie",
             },
             {
                 "id": 12,
@@ -155,7 +155,7 @@ class ContributionHistoryViewTest(TestCase):
                 "synset": self.synset_a,
                 "user": self.user_b,
                 "days_ago": 3,
-                "change_details": "Deleted lemma: waterkokertjie",
+                "change_details": "Deleted word: waterkokertjie",
             },
             {
                 "id": 15,

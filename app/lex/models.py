@@ -195,11 +195,32 @@ class Sense(models.Model):
         return deletion
 
 
-class Example(models.Model):
+class SenseExample(models.Model):
     text = models.CharField(
         max_length=1000,
         verbose_name=_("example"),
-        help_text=_("Example sentence showing typical usage"),
+        help_text=_(
+            "Example sentence illustrating the meaning of a word in a specific sense"
+        ),
+    )
+    sense = models.ForeignKey(
+        "Sense", on_delete=models.CASCADE, blank=False, verbose_name=_("Sense")
+    )
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = _("sense example")
+        verbose_name_plural = _("sense examples")
+
+    def __str__(self):
+        return self.text
+
+
+class SynsetExample(models.Model):
+    text = models.CharField(
+        max_length=1000,
+        verbose_name=_("example"),
+        help_text=_("Example sentence illustrating synset meaning"),
     )
     synset = models.ForeignKey(
         "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("Synset")
@@ -207,8 +228,8 @@ class Example(models.Model):
     history = HistoricalRecords()
 
     class Meta:
-        verbose_name = _("example")
-        verbose_name_plural = _("examples")
+        verbose_name = _("synset example")
+        verbose_name_plural = _("synset examples")
 
     def __str__(self):
         return self.text

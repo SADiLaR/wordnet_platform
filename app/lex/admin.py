@@ -7,13 +7,13 @@ from django.utils.translation import gettext_lazy as _
 from simple_history.admin import SimpleHistoryAdmin
 
 from lex.models import (
-    Example,
     Language,
     PartOfSpeech,
     Relation,
     RelationType,
     Sense,
     Synset,
+    SynsetExample,
     Word,
     Wordnet,
 )
@@ -77,11 +77,11 @@ class SynsetAdmin(SimpleHistoryAdmin):
 
     def get_inlines(self, request, obj):
         if not obj or not obj.display_name:
-            return [self.SenseInline, self.ExampleInline]
+            return [self.SenseInline, self.SynsetExampleInline]
         else:
             return [
                 self.SenseInline,
-                self.ExampleInline,
+                self.SynsetExampleInline,
                 self.RelationInlineFrom,
                 self.RelationInlineTo,
             ]
@@ -171,8 +171,8 @@ class SynsetAdmin(SimpleHistoryAdmin):
         verbose_name = _("Associated word")
         verbose_name_plural = _("Associated words")
 
-    class ExampleInline(admin.StackedInline):
-        model = Example
+    class SynsetExampleInline(admin.StackedInline):
+        model = SynsetExample
         extra = 0
 
     class RelationInlineFrom(NoRelatedWidgetsInlineMixin, admin.TabularInline):
@@ -205,7 +205,7 @@ class SynsetAdmin(SimpleHistoryAdmin):
 
         display_to.short_description = _("This synset")
 
-    inlines = [SenseInline, ExampleInline, RelationInlineFrom, RelationInlineTo]
+    inlines = [SenseInline, SynsetExampleInline, RelationInlineFrom, RelationInlineTo]
 
 
 # TODO : think about changing inheritance to SimpleHistoryAdmin

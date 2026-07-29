@@ -18,8 +18,10 @@ RUN <<EOF
   set -exo pipefail
   apt-get update
   apt-get -y upgrade
+  apt-get install -y --no-install-recommends graphviz graphviz-dev build-essential
   pip install --upgrade pip
   pip install -r requirements-dev.txt
+  apt-get remove --autoremove -y build-essential
   rm -rf /var/lib/apt/lists/*
 EOF
 

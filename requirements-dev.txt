@@ -1,2 +1,4 @@
 -r requirements.txt
 django-debug-toolbar==6.3.0
+django-extensions==4.1
+pygraphviz==2.0.1

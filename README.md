@@ -39,6 +39,20 @@ Local development setup
 
        docker compose up
 
+Schema diagrams
+===============
+The data model can be visualised as an entity-relationship diagram using
+``django-extensions``, which is available when running the development server
+(``DEBUG=True``). To generate the diagrams:
+
+    # Full schema (including historical models)
+    docker compose exec web python manage.py graph_models lex --output schema.png
+
+    # Reduced schema (historical models excluded)
+    docker compose exec web python manage.py graph_models lex --exclude-models "Historical*" --output schema_reduced.png
+
+The generated PNG files are saved to ``wordnet_platform/app/``.
+
 Deployment
 ==========
 A `SECRET_KEY` must be generated and provided as an environment variable before

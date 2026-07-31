@@ -50,8 +50,14 @@ INSTALLED_APPS = [
     "lex",
     "simple_history",
 ]
-if DEBUG and DEBUG_TOOLBAR:
-    INSTALLED_APPS += ["debug_toolbar"]
+if DEBUG:
+    INSTALLED_APPS += [
+        "django_extensions",
+    ]
+    if DEBUG_TOOLBAR:
+        INSTALLED_APPS += [
+            "debug_toolbar",
+        ]
 
 SIMPLE_HISTORY_REVERT_DISABLED = True
 

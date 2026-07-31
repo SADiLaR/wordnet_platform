@@ -21,12 +21,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(DEBUG=(bool, False), USE_X_FORWARDED_HOST=(bool, False))
 
 TESTING = sys.argv[1:2] == ["test"]  # True for manage.py test
-if TESTING:
-    environ.Env.read_env(BASE_DIR / "local" / "env.test")
-else:
-    environ.Env.read_env(BASE_DIR / "local" / "env.dev")
-    # In production, the above fails silently on OSError, keeping existing env vars.
-    # https://django-environ.readthedocs.io/en/latest/_modules/environ/environ.html#Env.read_env
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")

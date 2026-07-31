@@ -12,6 +12,14 @@ permissions:
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+    env:
+      DEBUG: "False"
+      SECRET_KEY: "django-insecure-ci-only"
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wordnet_db
+      DB_USER: sadilar
+      DB_PASSWORD: sadilar
     services:
       postgres:
         image: postgres:18

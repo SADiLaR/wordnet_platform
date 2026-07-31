@@ -29,7 +29,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - SECRET_KEY=${SECRET_KEY}
-      - DEBUG=True
+      - DEBUG=${DEBUG}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=wordnet_db  # see POSTGRES_DB above

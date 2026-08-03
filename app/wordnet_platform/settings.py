@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "contributions",
     "lex",
     "simple_history",
+    "nested_admin",
 ]
 if DEBUG:
     INSTALLED_APPS += [

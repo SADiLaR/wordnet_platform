@@ -4,6 +4,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import reverse
 from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
+from nested_admin import NestedModelAdmin, NestedStackedInline, NestedTabularInline
 from simple_history.admin import SimpleHistoryAdmin
 
 from lex.models import (
@@ -12,6 +13,7 @@ from lex.models import (
     Relation,
     RelationType,
     Sense,
+    SenseExample,
     Synset,
     SynsetExample,
     Word,
@@ -55,7 +57,7 @@ class LanguageAdmin(admin.ModelAdmin):
         return super().get_readonly_fields(request, obj)
 
 
-class SynsetAdmin(SimpleHistoryAdmin):
+class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
     list_filter = ["wordnet", "status"]
     list_display = ["__str__", "pos"]
     search_fields = ["sense__word__text", "definition"]
@@ -93,7 +95,9 @@ class SynsetAdmin(SimpleHistoryAdmin):
             context["show_save"] = False
             context["show_save_as_new"] = False
             context["show_save_and_add_another"] = False
-        return super().render_change_form(request, context, add, change, form_url, obj)
+        return super().render_change_form(
+            request, context, add=add, change=change, form_url=form_url, obj=obj
+        )
 
     def save_model(self, request, obj, form, change):
         """We override this method to inject change reasons for synset field changes."""
@@ -164,18 +168,26 @@ class SynsetAdmin(SimpleHistoryAdmin):
             + urlencode(params)
         )
 
-    class SenseInline(OnlyAddWidgetsInlineMixin, admin.TabularInline):
+    class SenseInline(OnlyAddWidgetsInlineMixin, NestedTabularInline):
         model = Sense
         autocomplete_fields = ["word"]
-        extra = 1
+        extra = 0
         verbose_name = _("Associated word")
         verbose_name_plural = _("Associated words")
 
-    class SynsetExampleInline(admin.StackedInline):
+        class SenseExampleInline(NestedStackedInline):
+            model = SenseExample
+            extra = 0
+            verbose_name = _("Usage example")
+            verbose_name_plural = _("Usage examples")
+
+        inlines = [SenseExampleInline]
+
+    class SynsetExampleInline(NestedStackedInline):
         model = SynsetExample
         extra = 0
 
-    class RelationInlineFrom(NoRelatedWidgetsInlineMixin, admin.TabularInline):
+    class RelationInlineFrom(NoRelatedWidgetsInlineMixin, NestedTabularInline):
         model = Relation
         exclude = ["display_name"]
         fk_name = "synset_from"
@@ -190,7 +202,7 @@ class SynsetAdmin(SimpleHistoryAdmin):
 
         display_from.short_description = _("This synset")
 
-    class RelationInlineTo(NoRelatedWidgetsInlineMixin, admin.TabularInline):
+    class RelationInlineTo(NoRelatedWidgetsInlineMixin, NestedTabularInline):
         model = Relation
         exclude = ["display_name"]
         fk_name = "synset_to"

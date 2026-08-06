@@ -19,8 +19,11 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
+from . import views
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("_health/", views.health, name="health"),
 ]
 if settings.DEBUG and settings.DEBUG_TOOLBAR:
     urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))

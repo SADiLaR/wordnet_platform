@@ -1,7 +1,7 @@
 django==5.2.11
 django-environ==0.13.0
 django-nested-admin==4.1.6
-django-simple-history==3.11.0
+django-simple-history==3.13.0
 gunicorn==25.3.0
 psycopg[binary]==3.3.3
 python-dateutil==2.9.0.post0

@@ -5,9 +5,20 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      pip-packages:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "django"
+        versions: [ ">=6.0.0" ]

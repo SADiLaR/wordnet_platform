@@ -170,6 +170,12 @@ class Sense(models.Model):
     synset = models.ForeignKey(
         "Synset", on_delete=models.PROTECT, blank=False, verbose_name=_("Synset")
     )
+    comment = models.CharField(
+        max_length=1000,
+        verbose_name=_("comment"),
+        default="",
+        help_text=_("Additional information on word sense"),
+    )
     history = HistoricalRecords()
 
     class Meta:

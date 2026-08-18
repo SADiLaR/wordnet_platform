@@ -1,0 +1,8 @@
+/* ── SADiLaR brand colours ── */
+:root {
+  --primary:       #1a2f69;
+  --sdlr-red:      #d11f26;
+  --bs-primary:    var(--primary);
+  --bs-primary-rgb: 26, 47, 105;
+  --bs-blue:       var(--primary);
+}

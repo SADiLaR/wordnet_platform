@@ -23,6 +23,7 @@ from . import views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("", include("editor.urls")),
     path("_health/", views.health, name="health"),
 ]
 if settings.DEBUG and settings.DEBUG_TOOLBAR:

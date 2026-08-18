@@ -58,10 +58,11 @@ class Wordnet(models.Model):
 
 
 class Synset(models.Model):
-    class Status(models.IntegerChoices):
-        UNVERIFIED = 0, _("Unverified")
-        REJECTED = -1, _("Rejected")
-        ACCEPTED = +1, _("Accepted")
+    class Status(models.TextChoices):
+        STUB = "stub"
+        DRAFT = "draft"
+        COMPLETE = "complete"
+        REVIEWED = "reviewed"
 
     wordnet = models.ForeignKey("Wordnet", on_delete=models.PROTECT, blank=False)
     definition = models.CharField(max_length=1000, verbose_name=_("definition"))
@@ -75,7 +76,14 @@ class Synset(models.Model):
         blank=False,
         verbose_name=_("part of speech"),
     )
-    status = models.IntegerField(choices=Status, default=Status.UNVERIFIED)
+    status = models.CharField(choices=Status, default=Status.STUB)
+    copied_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="derived_synsets",
+    )
     display_name = models.CharField(
         max_length=100, verbose_name=_("display_name"), blank=True
     )
@@ -174,6 +182,7 @@ class Sense(models.Model):
         max_length=1000,
         verbose_name=_("comment"),
         default="",
+        blank=True,
         help_text=_("Additional information on word sense"),
     )
     history = HistoricalRecords()

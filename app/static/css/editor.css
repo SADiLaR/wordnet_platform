@@ -6,3 +6,16 @@
   --bs-primary-rgb: 26, 47, 105;
   --bs-blue:       var(--primary);
 }
+
+/* ── Synset status badge colours ── */
+:root {
+  --stub-color:     #808080;
+  --draft-color:    #D16020;
+  --complete-color: #235245;
+  --reviewed-color: #1A2F69;
+}
+
+.badge-stub     { color: var(--stub-color);     border: 1px solid var(--stub-color); }
+.badge-draft    { color: var(--draft-color);    border: 1px solid var(--draft-color); }
+.badge-complete { color: var(--complete-color); border: 1px solid var(--complete-color); }
+.badge-reviewed { color: var(--reviewed-color); border: 1px solid var(--reviewed-color); }

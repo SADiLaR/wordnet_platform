@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "contributions",
     "lex",
+    "editor",
     "simple_history",
     "nested_admin",
 ]

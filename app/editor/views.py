@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 
 from lex.models import Synset, Wordnet
 
@@ -11,26 +11,25 @@ def landing(request):
 
 def browse_synsets(request):
     wordnets = Wordnet.objects.all()
-    if wordnet_name := request.GET.get("wordnet", None):
-        if wordnet_obj := next((w for w in wordnets if w.name == wordnet_name), None):
-            synsets = Synset.objects.filter(wordnet=wordnet_obj).select_related(
-                "copied_from"
-            )
-            context = {
-                "wordnet_found": True,
-                "wordnet": wordnet_obj,
-                "synsets": synsets,
-                "wordnets": wordnets,
-            }
-        else:
-            # no such wordnet
-            context = {
-                "wordnet_found": False,
-                "wordnet_name": wordnet_name,
-                "wordnets": wordnets,
-            }
-    else:
-        context = {"wordnet_found": False, "wordnets": wordnets}
+    context = {"wordnet_found": False, "wordnets": wordnets}
+    return render(
+        request,
+        "editor/browse/synsets.html",
+        context,
+    )
+
+
+def browse_synsets_by_wordnet(request, wn_pk):
+    wordnets = Wordnet.objects.all()
+    wordnet_obj = get_object_or_404(Wordnet, pk=wn_pk)
+    synsets = Synset.objects.filter(wordnet=wordnet_obj).select_related("copied_from")
+    context = {
+        "wordnet_found": True,
+        "wordnet": wordnet_obj,
+        "synsets": synsets,
+        "wordnets": wordnets,
+    }
+
     return render(
         request,
         "editor/browse/synsets.html",

@@ -6,14 +6,17 @@
 {% block content %}
 <h1 class="h4 mb-3">{% trans "Queue" %}</h1>
 <div class="d-flex align-items-center gap-2 mb-3">
-  <label for="wordnetSelect" class="text-secondary small mb-0">{% trans "Wordnet:" %}</label>
-  <select id="wordnetSelect" class="form-select form-select-sm w-auto"
-          onchange="window.location.href = this.value ? '?wordnet=' + encodeURIComponent(this.value) : '.'">
-    <option value="">{% trans "All" %}</option>
-    {% for w in wordnets %}
-      <option value="{{ w.name }}"{% if request.GET.wordnet == w.name %} selected{% endif %}>{{ w.name }}</option>
-    {% endfor %}
-  </select>
+  <span class="text-secondary small">{% trans "Wordnet:" %}</span>
+  <a href="{% url 'editor:landing' %}"
+     class="btn btn-sm {% if not request.GET.wordnet %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    {% trans "All" %}
+  </a>
+  {% for w in wordnets %}
+    <a href="?wordnet={{ w.pk }}"
+       class="btn btn-sm {% if request.GET.wordnet == w.pk|stringformat:'s' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      {{ w.name }}
+    </a>
+  {% endfor %}
 </div>
 <p class="text-secondary">{% trans "No assignments yet." %}</p>
 {% endblock %}

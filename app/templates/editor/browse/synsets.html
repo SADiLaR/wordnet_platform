@@ -11,19 +11,14 @@
 </ul>
 
 <div class="d-flex align-items-center gap-2 mb-3">
-  <label for="wordnetSelect" class="text-secondary small mb-0">{% trans "Wordnet:" %}</label>
-  <select id="wordnetSelect" class="form-select form-select-sm w-auto"
-          onchange="window.location.href = this.value ? '?wordnet=' + encodeURIComponent(this.value) : window.location.pathname">
-    <option value="">{% trans "— select wordnet —" %}</option>
-    {% for w in wordnets %}
-      <option value="{{ w.name }}"{% if request.GET.wordnet == w.name %} selected{% endif %}>{{ w.name }}</option>
-    {% endfor %}
-  </select>
+  <span class="text-secondary small">{% trans "Wordnet:" %}</span>
+  {% for w in wordnets %}
+    <a href="{% url 'editor:browse_synsets_by_wordnet' wn_pk=w.pk %}"
+       class="btn btn-sm {% if wordnet.pk == w.pk %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      {{ w.name }}
+    </a>
+  {% endfor %}
 </div>
-
-{% if wordnet_name and not wordnet_found %}
-  <p class="text-danger">{% blocktrans %}No wordnet named "{{ wordnet_name }}" was found.{% endblocktrans %}</p>
-{% endif %}
 
 {% if wordnet_found %}
   {% if synsets %}

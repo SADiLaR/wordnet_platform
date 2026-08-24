@@ -1,10 +1,27 @@
 /* ── SADiLaR brand colours ── */
 :root {
-  --primary:       #1a2f69;
-  --sdlr-red:      #d11f26;
+  --primary:       #1A2F69;
+  --primary-light: #8288BC;
+  --on-primary:    #FFF;
+  --sdlr-red:      #D11F26;
   --bs-primary:    var(--primary);
   --bs-primary-rgb: 26, 47, 105;
   --bs-blue:       var(--primary);
+}
+
+/* ── Button overrides ── */
+.btn-primary {
+  --bs-btn-bg:                 var(--primary);
+  --bs-btn-border-color:       var(--primary);
+  --bs-btn-hover-bg:           var(--primary-light);
+  --bs-btn-hover-border-color: var(--primary-light);
+  --bs-btn-active-bg:          var(--primary);
+}
+
+.btn-outline-secondary:hover {
+  --bs-btn-hover-bg:           var(--primary-light);
+  --bs-btn-hover-border-color: var(--primary-light);
+  --bs-btn-hover-color:        var(--on-primary);
 }
 
 /* ── Synset status badge colours ── */

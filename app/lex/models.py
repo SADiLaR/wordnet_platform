@@ -68,7 +68,7 @@ class Synset(models.Model):
     definition = models.CharField(max_length=1000, verbose_name=_("definition"))
     lexicalised = models.BooleanField(default=True, verbose_name=_("lexicalised"))
     princeton_id = models.CharField(
-        max_length=30, verbose_name=_("Princeton Wordnet ID"), blank=True
+        max_length=30, verbose_name=_("Princeton Wordnet ID"), blank=True, null=True
     )
     pos = models.ForeignKey(
         "PartOfSpeech",
@@ -286,7 +286,7 @@ class Relation(models.Model):
     )
     type = models.ForeignKey("RelationType", on_delete=models.PROTECT, blank=False)
     display_name = models.CharField(
-        max_length=100, verbose_name=_("display_name"), default="no_display_name"
+        max_length=270, verbose_name=_("display_name"), default="no_display_name"
     )
     history = HistoricalRecords(excluded_fields=["display_name"])
 

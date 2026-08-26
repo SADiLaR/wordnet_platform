@@ -2,3 +2,4 @@
 django-debug-toolbar==7.0.0
 django-extensions==4.1
 pygraphviz==2.0.1
+pymysql==1.2.0

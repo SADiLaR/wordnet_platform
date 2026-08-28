@@ -217,6 +217,7 @@ class SenseExample(models.Model):
         help_text=_(
             "Example sentence illustrating the meaning of a word in a specific sense"
         ),
+        blank=True,  # # stop the empty inline blocking save on the synset
     )
     sense = models.ForeignKey(
         "Sense", on_delete=models.CASCADE, blank=False, verbose_name=_("Sense")
@@ -236,6 +237,7 @@ class SynsetExample(models.Model):
         max_length=1000,
         verbose_name=_("example"),
         help_text=_("Example sentence illustrating synset meaning"),
+        blank=True,  # # stop the empty inline blocking save on the synset
     )
     synset = models.ForeignKey(
         "Synset", on_delete=models.CASCADE, blank=False, verbose_name=_("Synset")

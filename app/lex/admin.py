@@ -61,6 +61,7 @@ class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
     list_filter = ["wordnet", "status"]
     list_display = ["__str__", "pos"]
     search_fields = ["sense__word__text", "definition"]
+    raw_id_fields = ("copied_from",)
     exclude = ["display_name"]
 
     def get_form(self, request, obj=None, **kwargs):
@@ -193,12 +194,20 @@ class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
         fk_name = "synset_from"
         readonly_fields = ("display_from",)
         fields = ("display_from", "type", "synset_to")
-        extra = 1
+        raw_id_fields = ("synset_to",)
+        extra = 0
         verbose_name = _("Relation from this synset to another")
         verbose_name_plural = _("Relations from this synset to another")
 
         def display_from(self, obj):
             return str(obj.synset_from)
+
+        def get_queryset(self, request):
+            return (
+                super()
+                .get_queryset(request)
+                .select_related("synset_from", "synset_to", "type")
+            )
 
         display_from.short_description = _("This synset")
 
@@ -208,12 +217,20 @@ class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
         fk_name = "synset_to"
         readonly_fields = ("display_to",)
         fields = ("synset_from", "type", "display_to")
-        extra = 1
+        raw_id_fields = ("synset_from",)
+        extra = 0
         verbose_name = _("Relation from another synset to this synset")
         verbose_name_plural = _("Relations from another synset to this synset")
 
         def display_to(self, obj):
             return str(obj.synset_to)
+
+        def get_queryset(self, request):
+            return (
+                super()
+                .get_queryset(request)
+                .select_related("synset_from", "synset_to", "type")
+            )
 
         display_to.short_description = _("This synset")
 
@@ -243,6 +260,7 @@ class WordnetAdmin(admin.ModelAdmin):
 
 class RelationAdmin(SimpleHistoryAdmin):
     list_display = ["type", "synset_from", "synset_to"]
+    raw_id_fields = ("synset_from", "synset_to")
 
 
 admin.site.register(Language, LanguageAdmin)

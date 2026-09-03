@@ -8,12 +8,12 @@
 <div class="d-flex align-items-center gap-2 mb-3">
   <span class="text-secondary small">{% trans "Wordnet:" %}</span>
   <a href="{% url 'editor:landing' %}"
-     class="btn btn-sm {% if not request.GET.wordnet %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+     class="btn btn-sm {% if not wordnet_found %}btn-primary{% else %}btn-outline-secondary{% endif %}">
     {% trans "All" %}
   </a>
   {% for w in wordnets %}
-    <a href="?wordnet={{ w.pk }}"
-       class="btn btn-sm {% if request.GET.wordnet == w.pk|stringformat:'s' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    <a href="{% url 'editor:landing_by_wordnet' wn_pk=w.pk %}"
+       class="btn btn-sm {% if wordnet.pk == w.pk %}btn-primary{% else %}btn-outline-secondary{% endif %}">
       {{ w.name }}
     </a>
   {% endfor %}

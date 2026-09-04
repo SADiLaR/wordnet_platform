@@ -20,13 +20,9 @@
   </button>
   <div class="collapse navbar-collapse" id="navMain">
     <div class="navbar-nav me-auto">
-      <a class="nav-link" href="#">{% trans "Queue" %}</a>
-      <a class="nav-link" href="#">{% trans "Browse" %}</a>
+      <a class="nav-link" href="{% url 'editor:landing' %}">{% trans "Queue" %}</a>
+      <a class="nav-link" href="{% url 'editor:browse_synsets' %}">{% trans "Browse" %}</a>
     </div>
-    <span class="text-secondary small me-2">{% trans "Working on:" %}</span>
-    <select class="form-select form-select-sm w-auto">
-      <option>{% trans "— select wordnet —" %}</option>
-    </select>
   </div>
 </nav>
 

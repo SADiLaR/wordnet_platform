@@ -1,0 +1,47 @@
+{% extends "editor/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Browse synsets" %} — {% trans "AfWN Editor" %}{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">{% trans "Browse" %}</h1>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link active" href="{% url 'editor:browse_synsets' %}">{% trans "Synsets" %}</a></li>
+  <li class="nav-item"><a class="nav-link disabled" href="#">{% trans "Words" %}</a></li>
+</ul>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+  <span class="text-secondary small">{% trans "Wordnet:" %}</span>
+  {% for w in wordnets %}
+    <a href="{% url 'editor:browse_synsets_by_wordnet' wn_pk=w.pk %}"
+       class="btn btn-sm {% if wordnet.pk == w.pk %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      {{ w.name }}
+    </a>
+  {% endfor %}
+</div>
+
+{% if wordnet_found %}
+  {% if synsets %}
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>{% trans "Synset" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Source" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for synset in synsets %}
+          <tr>
+            <td><a href="#" class="link-body-emphasis text-decoration-none">{{ synset }}</a></td>
+            <td><span class="badge badge-{{ synset.status }}">{{ synset.get_status_display }}</span></td>
+            <td>{% if synset.copied_from %}<a href="#" class="link-body-emphasis text-decoration-none">{{ synset.copied_from }}</a>{% else %}—{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="text-secondary">{% trans "No synsets in this wordnet yet." %}</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

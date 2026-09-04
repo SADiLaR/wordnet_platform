@@ -43,7 +43,7 @@ class Language(models.Model):
 
 
 class Wordnet(models.Model):
-    name = models.CharField(max_length=50, verbose_name=_("name"))
+    name = models.CharField(max_length=50, verbose_name=_("name"), unique=True)
     language = models.ForeignKey(
         "Language", on_delete=models.PROTECT, blank=False, verbose_name=_("language")
     )

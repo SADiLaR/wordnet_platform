@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # 4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # 4.3.0
       - name: Login to SADiLaR Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # 4.6.0
         with:
@@ -35,7 +35,7 @@ jobs:
           tags: |
             docker.sadilar.org/wordnet_platform:latest
       - name: Use webhook action to start deployment
-        uses: joelwmale/webhook-action@cc1a66f987e1591785273fd6f9d2f7a9d8d7c9cd # 2.4.1
+        uses: joelwmale/webhook-action@50f3dc0b06625a68681ddb0ee36a6f7923d7b597 # 2.4.2
         with:
           url: https://api.bitbucket.org/2.0/repositories/team_sadilar/ansible/pipelines/
           headers: '{"Authorization": "Bearer ${{ secrets.BITBUCKET_PIPELINE_SECRET }}"}'

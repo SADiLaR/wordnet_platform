@@ -16,7 +16,7 @@ urlpatterns = [
         name="browse_synsets_by_wordnet",
     ),
     path(
-        "synsets/<int:ss_pk>/",
+        "synsets/<int:pk>/",
         views.synset_detail,
         name="synset_detail",
     ),

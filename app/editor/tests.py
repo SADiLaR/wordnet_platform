@@ -88,10 +88,10 @@ class EditorViewTest(TestCase):
         )
 
     def _get_synset_detail_url(self, synset_obj):
-        return reverse("editor:synset_detail", kwargs={"ss_pk": synset_obj.pk})
+        return reverse("editor:synset_detail", kwargs={"pk": synset_obj.pk})
 
     def _get_synset_detail_url_nonexist(self):
-        return reverse("editor:synset_detail", kwargs={"ss_pk": 99})
+        return reverse("editor:synset_detail", kwargs={"pk": 99})
 
     def test_browse_synsets_by_wordnet_existing(self):
         with self.assertNumQueries(3):
@@ -134,12 +134,12 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_synset_detail_existing_no_princeton(self):
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(3):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
 
     def test_synset_detail_existing_with_princeton(self):
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(4):
             response = self.client.get(self._get_synset_detail_url(self.synset_f))
         self.assertEqual(response.status_code, 200)
 
@@ -166,36 +166,25 @@ class EditorViewTest(TestCase):
         self.assertEqual(None, _guess_princeton_id(None))
         self.assertEqual("12345678-v", _guess_princeton_id("ENG20-12345678-v"))
 
-    def test_guess_source_synset_existing(self):
+    def test_guess_source_synset(self):
         with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
-            result = _guess_source_synset(self.synset_f)
-        self.assertEqual(result, self.synset_d)
-
-    def test_guess_source_synset_no_match(self):
-        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
-            result = _guess_source_synset(self.synset_b)
-        self.assertEqual(result, None)
-
-    def test_guess_source_synset_no_princeton_id(self):
-        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
-            result = _guess_source_synset(self.synset_a)
-        self.assertEqual(result, None)
-
-    def test_guess_source_synset_not_itself(self):
-        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
-            result = _guess_source_synset(self.synset_d)
-        self.assertEqual(result, None)
+            existing = _guess_source_synset(self.synset_f)
+            no_match = _guess_source_synset(self.synset_b)
+            no_princeton_id = _guess_source_synset(self.synset_a)
+            not_itself = _guess_source_synset(self.synset_d)
+        self.assertEqual(existing, self.synset_d)
+        self.assertEqual(no_match, None)
+        self.assertEqual(no_princeton_id, None)
+        self.assertEqual(not_itself, None)
 
     def test_guess_source_synset_view_existing(self):
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(5):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_f))
             self.assertEqual(response.context["source_synset"], self.synset_d)
-            self.assertEqual(response.context["explicit_source"], False)
 
     def test_copied_source_synset(self):
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(4):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
-            self.assertEqual(response.context["explicit_source"], True)

@@ -8,10 +8,10 @@
 <div class="mb-3">
   <h1 class="h4 mb-1">{% trans "Synset detail" %}</h1>
   <div class="d-flex flex-wrap gap-3 text-secondary small">
-    <span><span class="text-body-tertiary">{% trans "POS" %}&nbsp;</span>{{ synset.pos }}</span>
-    <span><span class="text-body-tertiary">{% trans "Wordnet" %}&nbsp;</span>{{ synset.wordnet }}</span>
+    <span><span class="text-body-tertiary">{% trans "POS" %} </span>{{ synset.pos }}</span>
+    <span><span class="text-body-tertiary">{% trans "Wordnet" %} </span>{{ synset.wordnet }}</span>
     {% if synset.princeton_id %}
-      <span><span class="text-body-tertiary">{% trans "Princeton ID" %}&nbsp;</span><code>{{ synset.princeton_id }}</code></span>
+      <span><span class="text-body-tertiary">{% trans "Princeton ID" %} </span><code>{{ synset.princeton_id }}</code></span>
     {% endif %}
     <span><span class="badge badge-{{ synset.status }}">{{ synset.get_status_display }}</span></span>
   </div>
@@ -24,7 +24,7 @@
       {% if source_synset %}
       <div class="card-header d-flex justify-content-between align-items-center">
         <span>{% trans "Source synset" %}</span>
-        {% if explicit_source %}
+        {% if synset.copied_from %}
           <span class="text-body-tertiary small">{{ source_synset.wordnet }}</span>
         {% else %}
           <span class="badge bg-secondary">{% trans "Suggested" %}</span>
@@ -32,26 +32,14 @@
       </div>
       <div class="card-body">
 
+        {# TODO: review choice of uppercase #}
         <p class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</p>
         <p class="mb-3">{{ source_synset.definition }}</p>
 
         <p class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</p>
-        {% if source_synset.sense_set.all %}
-          <ul class="list-unstyled mb-3">
-            {% for sense in source_synset.sense_set.all %}
-              <li class="py-2 border-bottom">
-                <div class="fw-medium">{{ sense.word.text }}</div>
-                {% for example in sense.senseexample_set.all %}
-                  <div class="text-secondary fst-italic small mt-1">"{{ example.text }}"</div>
-                {% endfor %}
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="text-secondary mb-3">{% trans "No words." %}</p>
-        {% endif %}
+        {% include "editor/snippets/_sense_list.html" with senses=source_synset.sense_set.all %}
 
-        {% if not explicit_source %}
+        {% if not synset.copied_from %}
           <button class="btn btn-sm btn-outline-secondary" disabled>{% trans "Link as source" %}</button>
           {# TODO: wire up Link button once editing is implemented #}
         {% endif %}
@@ -70,36 +58,23 @@
 
   <div class="col-md-6">
     <div class="card">
-      <div class="card-header">{{ synset.wordnet }} {% trans "synset" %}</div>
+      <div class="card-header">{{ synset.wordnet }} {% trans "synset" %}</div> {# TODO: improve for translation #}
       <div class="card-body">
 
         <p class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</p>
         <p class="mb-3">{{ synset.definition }}</p>
 
         <p class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</p>
-        {% if senses %}
-          <ul class="list-unstyled mb-3">
-            {% for sense in senses %}
-              <li class="py-2 border-bottom">
-                <div class="fw-medium">{{ sense.word.text }}</div>
-                {% for example in sense.senseexample_set.all %}
-                  <div class="text-secondary fst-italic small mt-1">"{{ example.text }}"</div>
-                {% endfor %}
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <p class="text-secondary mb-3">{% trans "No words yet." %}</p>
-        {% endif %}
+        {% include "editor/snippets/_sense_list.html" with senses=senses %}
 
         <p class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</p>
         {% for rel_type, directions in relations.items %}
           <p class="text-body-tertiary small fw-semibold mb-1">{{ rel_type }}</p>
           {% for rel in directions.outgoing %}
-            <div>→ <a href="{% url 'editor:synset_detail' ss_pk=rel.synset_to.pk %}" class="link-primary">{{ rel.synset_to }}</a></div>
+            <div>→ <a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}" class="link-primary">{{ rel.synset_to }}</a></div>
           {% endfor %}
           {% for rel in directions.incoming %}
-            <div>← <a href="{% url 'editor:synset_detail' ss_pk=rel.synset_from.pk %}" class="link-primary">{{ rel.synset_from }}</a></div>
+            <div>← <a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}" class="link-primary">{{ rel.synset_from }}</a></div>
           {% endfor %}
         {% endfor %}
 

@@ -1,10 +1,10 @@
 from collections import defaultdict
 
 from django.conf import settings
-from django.db.models import prefetch_related_objects
+from django.db.models import Q, prefetch_related_objects
 from django.shortcuts import get_object_or_404, render
 
-from lex.models import Relation, Sense, Synset, Wordnet
+from lex.models import Relation, Synset, Wordnet
 
 
 def _guess_princeton_id(id_code):
@@ -13,15 +13,15 @@ def _guess_princeton_id(id_code):
     return id_code
 
 
-def _guess_source_synset(synset_obj):
-    guessed_id = _guess_princeton_id(synset_obj.princeton_id)
+def _guess_source_synset(synset):
+    guessed_id = _guess_princeton_id(synset.princeton_id)
     if guessed_id:
         source_synset = (
             Synset.objects.filter(
                 princeton_id=guessed_id,
                 wordnet_id=settings.SOURCE_WORDNET_ID,  # TODO: make source wordnet configurable
             )
-            .exclude(pk=synset_obj.pk)
+            .exclude(pk=synset.pk)
             .first()
         )
     else:
@@ -56,39 +56,30 @@ def browse_synsets(request, wn_pk=None):
     )
 
 
-def synset_detail(request, ss_pk):
+def synset_detail(request, pk):
 
-    synset_obj = get_object_or_404(
-        Synset.objects.select_related("pos", "wordnet"), pk=ss_pk
+    synset = get_object_or_404(
+        Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet"), pk=pk
     )
-    senses = (
-        Sense.objects.filter(synset=ss_pk)
-        .select_related("word")
-        .prefetch_related("senseexample_set")
+    senses = synset.sense_set.select_related("word").prefetch_related(
+        "senseexample_set"
     )
 
-    outgoing_relations = Relation.objects.filter(synset_from=ss_pk).select_related(
-        "type", "synset_to"
-    )
-    incoming_relations = Relation.objects.filter(synset_to=ss_pk).select_related(
-        "type", "synset_from"
-    )
-
+    all_relations = Relation.objects.filter(
+        Q(synset_from=pk) | Q(synset_to=pk)
+    ).select_related("type", "synset_to", "synset_from")
     relations = defaultdict(lambda: {"outgoing": [], "incoming": []})
-    for rel in outgoing_relations:
-        relations[rel.type.name]["outgoing"].append(rel)
 
-    for rel in incoming_relations:
-        relations[rel.type.name]["incoming"].append(rel)
+    for rel in all_relations:
+        if synset == rel.synset_from:
+            relations[rel.type.name]["outgoing"].append(rel)
+        else:
+            relations[rel.type.name]["incoming"].append(rel)
 
-    if synset_obj.copied_from_id:
-        source_synset = Synset.objects.select_related("wordnet").get(
-            pk=synset_obj.copied_from_id
-        )
-        explicit_source = True
+    if synset.copied_from_id:
+        source_synset = synset.copied_from
     else:
-        source_synset = _guess_source_synset(synset_obj)
-        explicit_source = False
+        source_synset = _guess_source_synset(synset)
 
     if source_synset:
         prefetch_related_objects(
@@ -96,11 +87,10 @@ def synset_detail(request, ss_pk):
         )
 
     context = {
-        "synset": synset_obj,
+        "synset": synset,
         "senses": senses,
         "relations": dict(relations),
         "source_synset": source_synset,
-        "explicit_source": explicit_source,
     }
 
     return render(

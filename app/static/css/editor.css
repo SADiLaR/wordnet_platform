@@ -9,6 +9,11 @@
   --bs-blue:       var(--primary);
 }
 
+/* ── Code ── */
+code {
+  color: var(--primary-light);
+}
+
 /* ── Button overrides ── */
 .btn-primary {
   --bs-btn-bg:                 var(--primary);

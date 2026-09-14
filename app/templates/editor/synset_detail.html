@@ -1,0 +1,87 @@
+{% extends "editor/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Synset detail" %} — {% trans "AfWN Editor" %}{% endblock %}
+
+{% block content %}
+
+<div class="mb-3">
+  <h1 class="h4 mb-1">{% trans "Synset detail" %}</h1>
+  <div class="d-flex flex-wrap gap-3 text-secondary small">
+    <div><span class="text-body-tertiary">{% trans "POS" %} </span>{{ synset.pos }}</div>
+    <div><span class="text-body-tertiary">{% trans "Wordnet" %} </span>{{ synset.wordnet }}</div>
+    {% if synset.princeton_id %}
+      <div><span class="text-body-tertiary">{% trans "Princeton ID" %} </span><code>{{ synset.princeton_id }}</code></div>
+    {% endif %}
+    <div><span class="badge badge-{{ synset.status }}">{{ synset.get_status_display }}</span></div>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <div class="col-md-6">
+    <div class="card">
+      {% if source_synset %}
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
+        {% if synset.copied_from %}
+          <span class="text-body-tertiary small">{{ source_synset.wordnet }}</span>
+        {% else %}
+          <span class="badge bg-secondary">{% trans "Suggested" %}</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+
+        {# TODO: review choice of uppercase #}
+        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
+        <p class="mb-3">{{ source_synset.definition }}</p>
+
+        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
+        {% include "editor/snippets/_sense_list.html" with senses=source_synset.sense_set.all %}
+
+        {% if not synset.copied_from %}
+          <button class="btn btn-sm btn-outline-secondary" disabled>{% trans "Link as source" %}</button>
+          {# TODO: wire up Link button once editing is implemented #}
+        {% endif %}
+
+      </div>
+      {% else %}
+      <div class="card-header"><h2 class="h6 mb-0">{% trans "Source synset" %}</h2></div>
+      <div class="card-body text-center py-4">
+        <p class="text-secondary mb-3">{% trans "No source synset linked." %}</p>
+        <button class="btn btn-sm btn-outline-secondary" disabled>{% trans "Search for source" %}</button>
+        {# TODO: wire up Search button once editing is implemented #}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><h2 class="h6 mb-0">{{ synset.wordnet }} {% trans "synset" %}</h2></div> {# TODO: improve for translation #}
+      <div class="card-body">
+
+        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
+        <p class="mb-3">{{ synset.definition }}</p>
+
+        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
+        {% include "editor/snippets/_sense_list.html" with senses=senses %}
+
+        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</h3>
+        {% for rel_type, directions in relations.items %}
+          <h4 class="text-body-tertiary small fw-semibold mb-1">{{ rel_type }}</h4>
+          {% for rel in directions.outgoing %}
+            <div>→ <a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}" class="link-primary">{{ rel.synset_to }}</a></div>
+          {% endfor %}
+          {% for rel in directions.incoming %}
+            <div>← <a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}" class="link-primary">{{ rel.synset_from }}</a></div>
+          {% endfor %}
+        {% endfor %}
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

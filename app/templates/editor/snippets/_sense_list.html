@@ -1,0 +1,15 @@
+{% load i18n %}
+{% if senses %}
+  <ul class="list-unstyled mb-3">
+    {% for sense in senses %}
+      <li class="py-2 border-bottom">
+        <div class="fw-medium">{{ sense.word.text }}</div>
+        {% for example in sense.senseexample_set.all %}
+          <div class="text-secondary fst-italic small mt-1">"{{ example.text }}"</div>
+        {% endfor %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-secondary mb-3">{% trans "No words." %}</p>
+{% endif %}

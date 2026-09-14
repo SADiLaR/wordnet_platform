@@ -1,6 +1,9 @@
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
+from editor.models import Assignment
 from editor.views import _guess_princeton_id, _guess_source_synset
 from lex.models import (
     Language,
@@ -185,3 +188,47 @@ class EditorViewTest(TestCase):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
+
+
+class AssignmentModelTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser")
+        language = Language.objects.create(iso_code="eng", name="English")
+        pos = PartOfSpeech.objects.create(name="noun")
+        self.wordnet = Wordnet.objects.create(name="Test Wordnet", language=language)
+        self.wordnet_2 = Wordnet.objects.create(
+            name="Test Wordnet 2", language=language
+        )
+        self.synset_a = Synset.objects.create(
+            definition="A test synset", wordnet=self.wordnet, pos=pos
+        )
+        self.synset_b = Synset.objects.create(
+            definition="Another test synset", wordnet=self.wordnet, pos=pos
+        )
+
+    def test_clean_on_assignment(self):
+        no_target_synset = Assignment(
+            user=self.user, source_synset=self.synset_a, target_wordnet=self.wordnet
+        )
+        no_target_synset.full_clean()
+
+        no_target_wordnet = Assignment(
+            user=self.user, source_synset=self.synset_a, target_synset=self.synset_b
+        )
+        no_target_wordnet.full_clean()
+        self.assertEqual(no_target_wordnet.target_wordnet, self.wordnet)
+
+        no_target_synset_or_wordnet = Assignment(
+            user=self.user, source_synset=self.synset_a
+        )
+        with self.assertRaises(ValidationError):
+            no_target_synset_or_wordnet.full_clean()
+
+        incompatible_wordnet_and_synset = Assignment(
+            user=self.user,
+            source_synset=self.synset_a,
+            target_synset=self.synset_b,
+            target_wordnet=self.wordnet_2,
+        )
+        with self.assertRaises(ValidationError):
+            incompatible_wordnet_and_synset.full_clean()

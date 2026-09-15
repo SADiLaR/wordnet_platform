@@ -11,6 +11,7 @@ from lex.models import (
     Relation,
     RelationType,
     Sense,
+    SenseExample,
     Synset,
     Word,
     Wordnet,
@@ -67,10 +68,20 @@ class EditorViewTest(TestCase):
 
         self.sense_2 = Sense.objects.create(word=self.word_1, synset=self.synset_c)
 
+        self.sense_example = SenseExample.objects.create(
+            text="Hierdie is 'n toets.", sense=self.sense_1
+        )
+
         relation_type = RelationType.objects.create(name="hyper")
         Relation.objects.create(
             synset_from=self.synset_e,
             synset_to=self.synset_f,
+            type=relation_type,
+        )
+
+        Relation.objects.create(
+            synset_from=self.synset_c,
+            synset_to=self.synset_b,
             type=relation_type,
         )
 
@@ -94,7 +105,13 @@ class EditorViewTest(TestCase):
         return reverse("editor:synset_detail", kwargs={"pk": synset_obj.pk})
 
     def _get_synset_detail_url_nonexist(self):
-        return reverse("editor:synset_detail", kwargs={"pk": 99})
+        return reverse("editor:synset_detail", kwargs={"pk": 99999})
+
+    def _get_synset_status_htmx_url(self, synset_obj):
+        return reverse("editor:synset_status_htmx", kwargs={"pk": synset_obj.pk})
+
+    def _get_synset_status_htmx_url_nonexist(self):
+        return reverse("editor:synset_status_htmx", kwargs={"pk": 99999})
 
     def test_browse_synsets_by_wordnet_existing(self):
         with self.assertNumQueries(3):
@@ -110,7 +127,9 @@ class EditorViewTest(TestCase):
         )
 
     def test_browse_synsets_by_wordnet_non_existing(self):
-        nonexist_url = reverse("editor:browse_synsets_by_wordnet", kwargs={"wn_pk": 99})
+        nonexist_url = reverse(
+            "editor:browse_synsets_by_wordnet", kwargs={"wn_pk": 99999}
+        )
         response = self.client.get(nonexist_url)
         self.assertEqual(response.status_code, 404)
 
@@ -126,7 +145,7 @@ class EditorViewTest(TestCase):
 
     def test_queue_by_wordnet_non_existing(self):
         nonexist_url = reverse(
-            "editor:assignment_queue_by_wordnet", kwargs={"wn_pk": 99}
+            "editor:assignment_queue_by_wordnet", kwargs={"wn_pk": 99999}
         )
         response = self.client.get(nonexist_url)
         self.assertEqual(response.status_code, 404)
@@ -188,6 +207,72 @@ class EditorViewTest(TestCase):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
+
+    def test_status_htmx_get(self):
+        with self.assertNumQueries(1):
+            response = self.client.get(self._get_synset_status_htmx_url(self.synset_a))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get("warnings"))
+
+    def test_status_htmx_get_nonexist(self):
+        with self.assertNumQueries(1):
+            response = self.client.get(self._get_synset_status_htmx_url_nonexist())
+        self.assertEqual(response.status_code, 404)
+
+    def test_status_htmx_post_non_complete(self):
+        with self.assertNumQueries(3):
+            response = self.client.post(
+                self._get_synset_status_htmx_url(self.synset_a),
+                {"new_status": Synset.Status.DRAFT},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get("warnings"))
+
+        self.synset_a.refresh_from_db()
+        self.assertEqual(self.synset_a.status, Synset.Status.DRAFT)
+
+    def test_status_htmx_post_complete_triggers_warning(self):
+        with self.subTest("no words, no relations"):
+            with self.assertNumQueries(3):
+                response = self.client.post(
+                    self._get_synset_status_htmx_url(self.synset_a),
+                    {"new_status": Synset.Status.COMPLETE},
+                )
+            self.assertTrue(response.context["warnings"])
+            self.synset_a.refresh_from_db()
+            self.assertEqual(self.synset_a.status, Synset.Status.STUB)
+
+        with self.subTest("missing usage example"):
+            with self.assertNumQueries(5):
+                response = self.client.post(
+                    self._get_synset_status_htmx_url(self.synset_c),
+                    {"new_status": Synset.Status.COMPLETE},
+                )
+            self.assertTrue(response.context["warnings"])
+            self.synset_c.refresh_from_db()
+            self.assertEqual(self.synset_c.status, Synset.Status.STUB)
+
+    def test_status_htmx_post_complete_force_save(self):
+        with self.assertNumQueries(3):
+            response = self.client.post(
+                self._get_synset_status_htmx_url(self.synset_a),
+                {"new_status": Synset.Status.COMPLETE, "force_save": True},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get("warnings"))
+        self.synset_a.refresh_from_db()
+        self.assertEqual(self.synset_a.status, Synset.Status.COMPLETE)
+
+    def test_status_htmx_post_complete_no_warning_when_complete(self):
+        with self.assertNumQueries(7):
+            response = self.client.post(
+                self._get_synset_status_htmx_url(self.synset_b),
+                {"new_status": Synset.Status.COMPLETE},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context.get("warnings"))
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.COMPLETE)
 
 
 class AssignmentModelTest(TestCase):

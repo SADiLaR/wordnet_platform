@@ -98,3 +98,59 @@ def synset_detail(request, pk):
         "editor/synset_detail.html",
         context,
     )
+
+
+def synset_status_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    context = {"synset": synset}
+
+    if request.method == "POST":
+        status = request.POST["new_status"]
+
+        show_warning = False
+        if status == Synset.Status.COMPLETE and not request.POST.get("force_save"):
+            show_warning = not synset.definition
+            missing_data = {
+                "no_definition": not synset.definition,
+                "no_words": False,
+                "no_relations": False,
+                "missing_usage_examples": [],
+            }
+
+            prefetch_related_objects(
+                [synset], "sense_set__senseexample_set", "sense_set__word"
+            )
+            if len(synset.sense_set.all()) < 1:
+                missing_data["no_words"] = True
+                show_warning = True
+            else:
+                for sense in synset.sense_set.all():
+                    if len(sense.senseexample_set.all()) < 1:
+                        missing_data["missing_usage_examples"].append(sense.word.text)
+                        show_warning = True
+            if not Relation.objects.filter(
+                Q(synset_from=pk) | Q(synset_to=pk)
+            ).exists():
+                missing_data["no_relations"] = True
+                show_warning = True
+
+        if show_warning:
+            context.update(missing_data)
+            context["new_status"] = status
+            context["show_warning"] = True
+        else:
+            synset.status = status
+            synset.save(update_fields=["status"])
+
+        return render(
+            request,
+            "editor/snippets/_status_control.html",
+            context,
+        )
+
+    if request.method == "GET":
+        return render(
+            request,
+            "editor/snippets/_status_control.html",
+            context,
+        )

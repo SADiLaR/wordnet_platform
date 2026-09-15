@@ -31,11 +31,16 @@ code {
 
 /* ── Synset status badge colours ── */
 :root {
-  --stub-color:     #808080;
-  --draft-color:    #d16020;
-  --complete-color: #235245;
-  --reviewed-color: #1a2f69;
+  --stub-color:         #808080;
+  --stub-color-rgb:     128, 128, 128;
+  --draft-color:        #d16020;
+  --draft-color-rgb:    209, 96, 32;
+  --complete-color:     #235245;
+  --complete-color-rgb: 35, 82, 69;
+  --reviewed-color:     #1a2f69;
+  --reviewed-color-rgb: 26, 47, 105;
 }
+
 
 .badge-stub {
   color: var(--stub-color);
@@ -55,4 +60,62 @@ code {
 .badge-reviewed {
   color: var(--reviewed-color);
   border: 1px solid var(--reviewed-color);
+}
+
+/* ── Synset status button group ── */
+.btn-status {
+  background: transparent;
+  font-size: 0.75rem;
+}
+
+.btn-status-stub {
+  color: var(--stub-color);
+  border-color: var(--stub-color);
+  --bs-btn-focus-shadow-rgb: var(--stub-color-rgb);
+  outline-color: var(--stub-color);
+}
+
+.btn-status-draft {
+  color: var(--draft-color);
+  border-color: var(--draft-color);
+  --bs-btn-focus-shadow-rgb: var(--draft-color-rgb);
+  outline-color: var(--draft-color);
+}
+
+.btn-status-complete {
+  color: var(--complete-color);
+  border-color: var(--complete-color);
+  --bs-btn-focus-shadow-rgb: var(--complete-color-rgb);
+  outline-color: var(--complete-color);
+}
+
+.btn-status-reviewed {
+  color: var(--reviewed-color);
+  border-color: var(--reviewed-color);
+  --bs-btn-focus-shadow-rgb: var(--reviewed-color-rgb);
+  outline-color: var(--reviewed-color);
+}
+
+.btn-status-stub.active,
+.btn-status-stub:active {
+  background: var(--stub-color);
+  color: var(--primary-fg);
+}
+
+.btn-status-draft.active,
+.btn-status-draft:active {
+  background: var(--draft-color);
+  color: var(--primary-fg);
+}
+
+.btn-status-complete.active,
+.btn-status-complete:active {
+  background: var(--complete-color);
+  color: var(--primary-fg);
+}
+
+.btn-status-reviewed.active,
+.btn-status-reviewed:active {
+  background: var(--reviewed-color);
+  color: var(--primary-fg);
 }

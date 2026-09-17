@@ -3,6 +3,7 @@ from collections import defaultdict
 from django.conf import settings
 from django.db.models import Q, prefetch_related_objects
 from django.shortcuts import get_object_or_404, render
+from django.utils.translation import gettext as _
 
 from lex.models import Relation, Synset, Wordnet
 
@@ -96,5 +97,48 @@ def synset_detail(request, pk):
     return render(
         request,
         "editor/synset_detail.html",
+        context,
+    )
+
+
+def synset_status_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    context = {"synset": synset}
+
+    if request.method == "POST":
+        status = request.POST["new_status"]
+        warnings = []
+
+        if status == Synset.Status.COMPLETE and not request.POST.get("force_save"):
+            if not synset.definition:
+                warnings.append(_("No definition."))
+
+            prefetch_related_objects(
+                [synset], "sense_set__senseexample_set", "sense_set__word"
+            )
+            if len(synset.sense_set.all()) < 1:
+                warnings.append(_("No words."))
+            else:
+                for sense in synset.sense_set.all():
+                    if len(sense.senseexample_set.all()) < 1:
+                        warnings.append(
+                            _('"%(word)s" has no usage example.')
+                            % {"word": sense.word.text}
+                        )
+            if not Relation.objects.filter(
+                Q(synset_from=pk) | Q(synset_to=pk)
+            ).exists():
+                warnings.append(_("No relations."))
+
+        if warnings:
+            context["warnings"] = warnings
+            context["new_status"] = status
+        else:
+            synset.status = status
+            synset.save(update_fields=["status"])
+
+    return render(
+        request,
+        "editor/snippets/_status_control.html",
         context,
     )

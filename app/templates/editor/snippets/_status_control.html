@@ -1,0 +1,46 @@
+{% load i18n %}
+<div id="status-control">
+  <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Synset status' %}">
+    {% for value, label in synset.Status.choices %}
+      <input type="radio"
+             class="btn-check"
+             name="status"
+             id="status-{{ synset.pk }}-{{ value }}"
+             autocomplete="off"
+             {% if value == synset.status %}checked{% endif %}
+             hx-post="{% url 'editor:synset_status_htmx' pk=synset.pk %}"
+             hx-vals='{"new_status": "{{ value }}"}'
+             hx-trigger="change"
+             hx-target="#status-control"
+             hx-swap="outerHTML">
+      <label class="btn btn-status status-{{ value }}" for="status-{{ synset.pk }}-{{ value }}">
+        {{ label }}
+      </label>
+    {% endfor %}
+  </div>
+  {% if warnings %}
+  <div id="status-warning" class="alert alert-warning mt-2">
+    <p class="fw-semibold mb-1">{% trans "This synset may not be complete:" %}</p>
+    <ul class="mb-2">
+      {% for warning in warnings %}
+        <li>{{ warning }}</li>
+      {% endfor %}
+    </ul>
+    <button type="button"
+            class="btn btn-sm btn-warning me-2"
+            hx-post="{% url 'editor:synset_status_htmx' pk=synset.pk %}"
+            hx-vals='{"new_status": "{{ new_status }}", "force_save": "true"}'
+            hx-target="#status-control"
+            hx-swap="outerHTML">
+      {% trans "Set to complete anyway" %}
+    </button>
+    <button type="button"
+            class="btn btn-sm btn-link text-secondary"
+            hx-get="{% url 'editor:synset_status_htmx' pk=synset.pk %}"
+            hx-target="#status-control"
+            hx-swap="outerHTML">
+      {% trans "Cancel" %}
+    </button>
+  </div>
+  {% endif %}
+</div>

@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "editor",
     "simple_history",
     "nested_admin",
+    "django_htmx",
 ]
 if DEBUG:
     INSTALLED_APPS += [
@@ -75,6 +76,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "simple_history.middleware.HistoryRequestMiddleware",
+    "django_htmx.middleware.HtmxMiddleware",
 ]
 if DEBUG and DEBUG_TOOLBAR:
     MIDDLEWARE.insert(2, "debug_toolbar.middleware.DebugToolbarMiddleware")

@@ -1,12 +1,18 @@
 /* ── SADiLaR brand colours ── */
 :root {
-  --primary:       #1a2f69;
+  --primary: #1a2f69;
   --primary-light: #8288bc;
-  --primary-fg:    #fff;
-  --sdlr-red:      #d11f26;
-  --bs-primary:    var(--primary);
+  --primary-fg: #fff;
+  --sdlr-red: #d11f26;
+  --bs-primary: var(--primary);
   --bs-primary-rgb: 26, 47, 105;
-  --bs-blue:       var(--primary);
+  --bs-blue: var(--primary);
+
+  /* Synset status colours */
+  --stub-color: 128, 128, 128;
+  --draft-color: 209, 96, 32;
+  --complete-color: 35, 82, 69;
+  --reviewed-color: 26, 47, 105;
 }
 
 /* ── Code ── */
@@ -16,43 +22,49 @@ code {
 
 /* ── Button overrides ── */
 .btn-primary {
-  --bs-btn-bg:                 var(--primary);
-  --bs-btn-border-color:       var(--primary);
-  --bs-btn-hover-bg:           var(--primary-light);
+  --bs-btn-bg: var(--primary);
+  --bs-btn-border-color: var(--primary);
+  --bs-btn-hover-bg: var(--primary-light);
   --bs-btn-hover-border-color: var(--primary-light);
-  --bs-btn-active-bg:          var(--primary);
+  --bs-btn-active-bg: var(--primary);
 }
 
-.btn-outline-secondary:hover {
-  --bs-btn-hover-bg:           var(--primary-light);
-  --bs-btn-hover-border-color: var(--primary-light);
-  --bs-btn-hover-color:        var(--on-primary);
+/* ── Synset status colours ── */
+.status-stub {
+  --status-color: var(--stub-color);
 }
 
-/* ── Synset status badge colours ── */
-:root {
-  --stub-color:     #808080;
-  --draft-color:    #d16020;
-  --complete-color: #235245;
-  --reviewed-color: #1a2f69;
+.status-draft {
+  --status-color: var(--draft-color);
 }
 
-.badge-stub {
-  color: var(--stub-color);
-  border: 1px solid var(--stub-color);
+.status-complete {
+  --status-color: var(--complete-color);
 }
 
-.badge-draft {
-  color: var(--draft-color);
-  border: 1px solid var(--draft-color);
+.status-reviewed {
+  --status-color: var(--reviewed-color);
 }
 
-.badge-complete {
-  color: var(--complete-color);
-  border: 1px solid var(--complete-color);
+/* ── Synset status badge ── */
+.badge-status {
+  border: 1px solid rgb(var(--status-color));
+  color: rgb(var(--status-color));
 }
 
-.badge-reviewed {
-  color: var(--reviewed-color);
-  border: 1px solid var(--reviewed-color);
+/* ── Synset status button group ── */
+.btn-status {
+  font-size: 0.75rem;
+  --bs-btn-color: rgb(var(--status-color));
+  --bs-btn-border-color: rgb(var(--status-color));
+  --bs-btn-active-color: var(--primary-fg);
+  --bs-btn-active-bg: rgb(var(--status-color));
+  --bs-btn-active-border-color: rgb(var(--status-color));
+  --bs-btn-focus-shadow-rgb: var(--status-color);
+}
+
+.btn-check + .btn-status:hover {
+  background-color: rgba(var(--status-color), 0.2);
+  border-color: rgb(var(--status-color));
+  color: rgb(var(--status-color));
 }

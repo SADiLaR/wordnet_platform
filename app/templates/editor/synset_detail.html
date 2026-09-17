@@ -7,14 +7,14 @@
 
 <div class="mb-3">
   <h1 class="h4 mb-1">{% trans "Synset detail" %}</h1>
-  <div class="d-flex flex-wrap gap-3 text-secondary small">
+  <div class="d-flex flex-wrap gap-3 align-items-center text-secondary small mb-2">
     <div><span class="text-body-tertiary">{% trans "POS" %} </span>{{ synset.pos }}</div>
     <div><span class="text-body-tertiary">{% trans "Wordnet" %} </span>{{ synset.wordnet }}</div>
     {% if synset.princeton_id %}
       <div><span class="text-body-tertiary">{% trans "Princeton ID" %} </span><code>{{ synset.princeton_id }}</code></div>
     {% endif %}
-    <div><span class="badge badge-{{ synset.status }}">{{ synset.get_status_display }}</span></div>
   </div>
+  {% include "editor/snippets/_status_control.html" %}
 </div>
 
 <div class="row g-3">

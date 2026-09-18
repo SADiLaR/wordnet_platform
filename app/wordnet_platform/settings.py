@@ -161,6 +161,25 @@ if DEBUG:
     else:
         INTERNAL_IPS = ["127.0.0.1"]
 
+# Email settings
+EMAIL_HOST = env("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="webmaster@localhost")
+SERVER_EMAIL = env("SERVER_EMAIL", default="root@localhost")
+EMAIL_SUBJECT_PREFIX = env("EMAIL_SUBJECT_PREFIX", default="[Django] ")
+_email_backend_console = env.bool("EMAIL_BACKEND_CONSOLE", default=False)
+
+if DEBUG and _email_backend_console:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Format as: Name Surname address@example.com, Name Surname address@example.com
+ADMINS = [
+    tuple(admin.strip().rsplit(maxsplit=1)) for admin in env.list("ADMINS", default=[])
+]
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

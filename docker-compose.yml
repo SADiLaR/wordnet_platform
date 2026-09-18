@@ -35,5 +35,15 @@ services:
       - DB_NAME=wordnet_db  # see POSTGRES_DB above
       - DB_USER=sadilar  # see POSTGRES_USER above
       - DB_PASSWORD=${DB_PASSWORD} # see POSTGRES_PASSWORD above
+      - EMAIL_HOST=${EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${EMAIL_PORT:-25}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-False}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-webmaster@localhost}
+      - SERVER_EMAIL=${SERVER_EMAIL:-root@localhost}
+      - "EMAIL_SUBJECT_PREFIX=${EMAIL_SUBJECT_PREFIX:-[Django] }"
+      - ADMINS=${ADMINS:-}
+      - EMAIL_BACKEND_CONSOLE=${EMAIL_BACKEND_CONSOLE:-True}
 volumes:
   postgres_data:

@@ -32,7 +32,7 @@
             hx-vals='{"new_status": "{{ new_status }}", "force_save": "true"}'
             hx-target="#status-control"
             hx-swap="outerHTML">
-      {% trans "Set to complete anyway" %}
+      {% blocktrans with label=new_status_label %}Set to <b>{{ label }}</b> anyway{% endblocktrans %}
     </button>
     <button type="button"
             class="btn btn-sm btn-link text-secondary"

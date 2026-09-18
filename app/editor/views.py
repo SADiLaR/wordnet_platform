@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from django.conf import settings
+from django.core.paginator import Paginator
 from django.db.models import Q, prefetch_related_objects
 from django.shortcuts import get_object_or_404, render
 
@@ -43,11 +44,18 @@ def browse_synsets(request, wn_pk=None):
     context = {"wordnets": wordnets}
     if wn_pk:
         wordnet_obj = get_object_or_404(Wordnet, pk=wn_pk)
-        synsets = Synset.objects.filter(wordnet=wordnet_obj).select_related(
-            "copied_from"
+        synsets = (
+            Synset.objects.filter(wordnet=wordnet_obj)
+            .select_related("copied_from")
+            .order_by("display_name")
         )
+
+        paginator = Paginator(synsets, 20)
+        page_number = request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+
         context["wordnet"] = wordnet_obj
-        context["synsets"] = synsets
+        context["page_obj"] = page_obj
 
     return render(
         request,

@@ -44,9 +44,11 @@ def browse_synsets(request, wn_pk=None):
     context = {"wordnets": wordnets}
     if wn_pk:
         wordnet_obj = get_object_or_404(Wordnet, pk=wn_pk)
-        synsets = Synset.objects.filter(wordnet=wordnet_obj).select_related(
-            "copied_from"
-        ).order_by("display_name")
+        synsets = (
+            Synset.objects.filter(wordnet=wordnet_obj)
+            .select_related("copied_from")
+            .order_by("display_name")
+        )
 
         paginator = Paginator(synsets, 20)
         page_number = request.GET.get("page")

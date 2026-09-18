@@ -109,7 +109,10 @@ def synset_status_htmx(request, pk):
         status = request.POST["new_status"]
         warnings = []
 
-        if status == Synset.Status.COMPLETE and not request.POST.get("force_save"):
+        if status in (
+            Synset.Status.COMPLETE,
+            Synset.Status.REVIEWED,
+        ) and not request.POST.get("force_save"):
             if not synset.definition:
                 warnings.append(_("No definition."))
 
@@ -133,6 +136,7 @@ def synset_status_htmx(request, pk):
         if warnings:
             context["warnings"] = warnings
             context["new_status"] = status
+            context["new_status_label"] = Synset.Status(status).label
         else:
             synset.status = status
             synset.save(update_fields=["status"])

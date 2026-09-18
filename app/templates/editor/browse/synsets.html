@@ -40,6 +40,8 @@
         {% endfor %}
       </tbody>
     </table>
+    {# Pagination #}
+    {% include "editor/browse/_pagination.html" %}
   {% else %}
     <p class="text-secondary">{% trans "No synsets in this wordnet yet." %}</p>
   {% endif %}

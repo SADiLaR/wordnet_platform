@@ -97,14 +97,14 @@ class EditorViewTest(TestCase):
         return reverse("editor:synset_detail", kwargs={"pk": 99})
 
     def test_browse_synsets_by_wordnet_existing(self):
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(4):
             response = self.client.get(self._get_browse_wn_url())
         self.assertEqual(response.status_code, 200)
 
     def test_browse_synsets_by_wordnet_existing_excludes_other_synsets(self):
         response = self.client.get(self._get_browse_wn_url())
         self.assertQuerySetEqual(
-            response.context["synsets"],
+            response.context["page_obj"].object_list,
             [self.synset_a, self.synset_b, self.synset_c, self.synset_e, self.synset_f],
             ordered=False,
         )

@@ -113,6 +113,12 @@ class EditorViewTest(TestCase):
     def _get_synset_status_htmx_url_nonexist(self):
         return reverse("editor:synset_status_htmx", kwargs={"pk": 99999})
 
+    def _get_synset_definition_url(self, synset_obj):
+        return reverse("editor:synset_definition", kwargs={"pk": synset_obj.pk})
+
+    def _get_synset_definition_url_nonexist(self):
+        return reverse("editor:synset_definition", kwargs={"pk": 99999})
+
     def test_browse_synsets_by_wordnet_existing(self):
         with self.assertNumQueries(3):
             response = self.client.get(self._get_browse_wn_url())
@@ -273,6 +279,33 @@ class EditorViewTest(TestCase):
         self.assertFalse(response.context.get("warnings"))
         self.synset_b.refresh_from_db()
         self.assertEqual(self.synset_b.status, Synset.Status.COMPLETE)
+
+    def test_definition_post(self):
+        new_def = "a complete new definition"
+        with self.assertNumQueries(3):
+            response = self.client.post(
+                self._get_synset_definition_url(self.synset_a),
+                {"definition": new_def},
+            )
+        self.assertRedirects(response, self._get_synset_detail_url(self.synset_a))
+        self.synset_a.refresh_from_db()
+        self.assertEqual(self.synset_a.definition, new_def)
+        self.assertEqual(self.synset_a.status, Synset.Status.DRAFT)
+
+    def test_definition_post_non_existing(self):
+        with self.assertNumQueries(1):
+            response = self.client.post(
+                self._get_synset_definition_url_nonexist(),
+                {"definition": "a new definition"},
+            )
+        self.assertEqual(response.status_code, 404)
+
+    def test_definition_get_not_allowed(self):
+        with self.assertNumQueries(1):
+            response = self.client.get(
+                self._get_synset_definition_url(self.synset_a),
+            )
+        self.assertEqual(response.status_code, 405)
 
 
 class AssignmentModelTest(TestCase):

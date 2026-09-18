@@ -25,4 +25,9 @@ urlpatterns = [
         views.synset_status_htmx,
         name="synset_status_htmx",
     ),
+    path(
+        "synsets/<int:pk>/definition/",
+        views.synset_definition,
+        name="synset_definition",
+    ),
 ]

@@ -68,3 +68,12 @@ code {
   border-color: rgb(var(--status-color));
   color: rgb(var(--status-color));
 }
+
+/* ── Inline editable forms ── */
+.inline-actions {
+  display: none;
+}
+
+.inline-form:focus-within .inline-actions {
+  display: block;
+}

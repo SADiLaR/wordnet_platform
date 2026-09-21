@@ -69,6 +69,19 @@ code {
   color: rgb(var(--status-color));
 }
 
+/* ── Unsaved field indicator ── */
+.field-unsaved {
+  border-color: rgb(var(--draft-color));
+  background-color: rgba(var(--draft-color), 0.05);
+}
+
+.field-unsaved-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: rgb(var(--draft-color));
+  margin-top: 0.25rem;
+}
+
 /* ── Inline editable forms ── */
 .inline-actions {
   display: none;

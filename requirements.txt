@@ -7,3 +7,4 @@ gunicorn==26.0.0
 psycopg[binary]==3.3.4
 python-dateutil==2.9.0.post0
 whitenoise[brotli]==6.12.0
+django-filter==26.1

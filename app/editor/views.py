@@ -9,6 +9,7 @@ from django.utils.translation import gettext as _
 
 from lex.models import Relation, Synset, Wordnet
 
+from .filters import SynsetFilter
 from .forms import DefinitionForm
 
 
@@ -43,23 +44,21 @@ def assignment_queue(request, wn_pk=None):
     return render(request, "editor/assignment_queue.html", context)
 
 
-def browse_synsets(request, wn_pk=None):
+def browse_synsets(request):
     wordnets = Wordnet.objects.all()
     context = {"wordnets": wordnets}
-    if wn_pk:
-        wordnet_obj = get_object_or_404(Wordnet, pk=wn_pk)
-        synsets = (
-            Synset.objects.filter(wordnet=wordnet_obj)
-            .select_related("copied_from")
-            .order_by("display_name")
-        )
+    synsets = (
+        Synset.objects.all().select_related("copied_from").order_by("display_name")
+    )
+    f = SynsetFilter(request.GET, queryset=synsets)
+    url_params = request.GET.copy()
+    paginator = Paginator(f.qs, 20)
+    page_number = url_params.pop("page", None)
+    page_obj = paginator.get_page(page_number)
 
-        paginator = Paginator(synsets, 20)
-        page_number = request.GET.get("page")
-        page_obj = paginator.get_page(page_number)
-
-        context["wordnet"] = wordnet_obj
-        context["page_obj"] = page_obj
+    context["page_obj"] = page_obj
+    context["filter"] = f
+    context["url_params"] = url_params.urlencode()
 
     return render(
         request,

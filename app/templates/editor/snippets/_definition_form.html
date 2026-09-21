@@ -1,0 +1,15 @@
+{% load i18n %}
+<form class="inline-form mb-3" method="post" action="{% url 'editor:synset_definition' pk=synset.pk %}">
+  {% csrf_token %}
+  <textarea class="form-control{% if definition_form.definition.errors %} is-invalid{% endif %}"
+            name="definition"
+            rows="2"
+            data-unsaved-track>{{ definition_form.definition.value }}</textarea>
+  {% for error in definition_form.definition.errors %}
+    <div class="invalid-feedback d-block">{{ error }}</div>
+  {% endfor %}
+  <div class="inline-actions mt-2">
+    <button type="submit" class="btn btn-sm btn-primary">{% trans "Save" %}</button>
+    <a href="{% url 'editor:synset_detail' pk=synset.pk %}" class="btn btn-sm btn-link text-secondary">{% trans "Discard" %}</a>
+  </div>
+</form>

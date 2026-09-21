@@ -3,10 +3,13 @@ from collections import defaultdict
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q, prefetch_related_objects
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponseNotAllowed
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 
 from lex.models import Relation, Synset, Wordnet
+
+from .forms import DefinitionForm
 
 
 def _guess_princeton_id(id_code):
@@ -65,11 +68,18 @@ def browse_synsets(request, wn_pk=None):
     )
 
 
-def synset_detail(request, pk):
+def _synset_context(pk=None, synset=None):
 
-    synset = get_object_or_404(
-        Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet"), pk=pk
-    )
+    if synset is None and pk is None:
+        raise ValueError("Either pk or synset must be provided")
+    if synset is None:
+        synset = get_object_or_404(
+            Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet"),
+            pk=pk,
+        )
+    if not pk:
+        pk = synset.pk
+
     senses = synset.sense_set.select_related("word").prefetch_related(
         "senseexample_set"
     )
@@ -100,8 +110,14 @@ def synset_detail(request, pk):
         "senses": senses,
         "relations": dict(relations),
         "source_synset": source_synset,
+        "definition_form": DefinitionForm(initial={"definition": synset.definition}),
     }
+    return context
 
+
+def synset_detail(request, pk):
+
+    context = _synset_context(pk)
     return render(
         request,
         "editor/synset_detail.html",
@@ -154,3 +170,25 @@ def synset_status_htmx(request, pk):
         "editor/snippets/_status_control.html",
         context,
     )
+
+
+def synset_definition(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+
+    if request.method == "POST":
+        form = DefinitionForm(request.POST)
+        if form.is_valid():
+            synset.definition = form.cleaned_data["definition"]
+            updated_fields = ["definition"]
+            if synset.status != Synset.Status.DRAFT:
+                synset.status = Synset.Status.DRAFT
+                updated_fields.append("status")
+            synset.save(update_fields=updated_fields)
+
+            return redirect("editor:synset_detail", pk=pk)
+        else:
+            context = _synset_context(synset)
+            context["definition_form"] = form
+            return render(request, "editor/synset_detail.html", context)
+
+    return HttpResponseNotAllowed(["POST"])

@@ -32,5 +32,28 @@
   {% block content %}{% endblock %}
 </main>
 
+<script>
+  function updateStatusButtons() {
+    const anyDirty = document.querySelector('[data-unsaved-track].field-unsaved') !== null;
+    document.querySelectorAll('.btn-check').forEach(function(btn) {
+      btn.disabled = anyDirty;
+    });
+  }
+
+  document.querySelectorAll('[data-unsaved-track]').forEach(function(el) {
+    const original = el.value;
+    const hint = document.createElement('span');
+    hint.className = 'field-unsaved-hint';
+    hint.textContent = 'Unsaved changes'; // TODO: translate once Django JS i18n is configured
+    hint.hidden = true;
+    el.insertAdjacentElement('afterend', hint);
+    el.addEventListener('input', function() {
+      const dirty = el.value !== original;
+      el.classList.toggle('field-unsaved', dirty);
+      hint.hidden = !dirty;
+      updateStatusButtons();
+    });
+  });
+</script>
 </body>
 </html>

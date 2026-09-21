@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
+from editor.filters import SynsetFilter
 from editor.models import Assignment
 from editor.views import _guess_princeton_id, _guess_source_synset
 from lex.models import (
@@ -26,43 +27,52 @@ class EditorViewTest(TestCase):
         self.wordnet_2 = Wordnet.objects.create(
             name="'n Ander Toets Wordnet", language=language
         )
-        pos = PartOfSpeech.objects.create(name="noun")
+        self.pos_noun = PartOfSpeech.objects.create(name="noun")
+        self.pos_verb = PartOfSpeech.objects.create(name="verb")
 
         self.synset_a = Synset.objects.create(
-            definition="'n Toets synset", wordnet=self.wordnet, pos=pos
+            definition="'n Toets synset",
+            wordnet=self.wordnet,
+            pos=self.pos_noun,
         )
         self.synset_b = Synset.objects.create(
             definition="Nog 'n toets synset",
             wordnet=self.wordnet,
-            pos=pos,
+            pos=self.pos_verb,
             princeton_id="12345678-a",
+            status=Synset.Status.DRAFT,
         )
         self.synset_c = Synset.objects.create(
-            definition="'n Addisionele toets synset", wordnet=self.wordnet, pos=pos
+            definition="'n Addisionele toets synset",
+            wordnet=self.wordnet,
+            pos=self.pos_noun,
         )
 
         self.synset_d = Synset.objects.create(
             definition="'n Synset in die tweede wordnet",
             wordnet=self.wordnet_2,
-            pos=pos,
+            pos=self.pos_verb,
             princeton_id="12345678-n",
+            status=Synset.Status.COMPLETE,
         )
 
         self.synset_e = Synset.objects.create(
             definition="'n Synset met 'n kopie van 'n ander woordnet",
             wordnet=self.wordnet,
-            pos=pos,
+            pos=self.pos_noun,
             copied_from=self.synset_d,
         )
 
         self.synset_f = Synset.objects.create(
             definition="'n Synset met 'n Princeton ID van 'n ander woordnet",
             wordnet=self.wordnet,
-            pos=pos,
+            pos=self.pos_noun,
             princeton_id="12345678-n",
         )
 
-        self.word_1 = Word.objects.create(text="toets", pos=pos, language=language)
+        self.word_1 = Word.objects.create(
+            text="toets", pos=self.pos_noun, language=language
+        )
 
         self.sense_1 = Sense.objects.create(word=self.word_1, synset=self.synset_b)
 
@@ -87,11 +97,6 @@ class EditorViewTest(TestCase):
 
     def _get_browse_url(self):
         return reverse("editor:browse_synsets")
-
-    def _get_browse_wn_url(self):
-        return reverse(
-            "editor:browse_synsets_by_wordnet", kwargs={"wn_pk": self.wordnet.pk}
-        )
 
     def _get_queue_url(self):
         return reverse("editor:assignment_queue")
@@ -119,30 +124,42 @@ class EditorViewTest(TestCase):
     def _get_synset_definition_url_nonexist(self):
         return reverse("editor:synset_definition", kwargs={"pk": 99999})
 
-    def test_browse_synsets_by_wordnet_existing(self):
+    def test_browse_synsets(self):
         with self.assertNumQueries(4):
-            response = self.client.get(self._get_browse_wn_url())
-        self.assertEqual(response.status_code, 200)
-
-    def test_browse_synsets_by_wordnet_existing_excludes_other_synsets(self):
-        response = self.client.get(self._get_browse_wn_url())
-        self.assertQuerySetEqual(
-            response.context["page_obj"].object_list,
-            [self.synset_a, self.synset_b, self.synset_c, self.synset_e, self.synset_f],
-            ordered=False,
-        )
-
-    def test_browse_synsets_by_wordnet_non_existing(self):
-        nonexist_url = reverse(
-            "editor:browse_synsets_by_wordnet", kwargs={"wn_pk": 99999}
-        )
-        response = self.client.get(nonexist_url)
-        self.assertEqual(response.status_code, 404)
-
-    def test_browse_synsets_existing(self):
-        with self.assertNumQueries(1):
             response = self.client.get(self._get_browse_url())
         self.assertEqual(response.status_code, 200)
+
+    def test_synsets_wordnet_filter(self):
+        data = {"wordnet": [self.wordnet.id]}
+        wn_filter = SynsetFilter(data=data)
+        qs = wn_filter.qs
+        self.assertEqual(qs.count(), 5)
+        self.assertIn(self.synset_a, qs)
+        self.assertNotIn(self.synset_d, qs)
+
+    def test_synsets_pos_filter(self):
+        data = {"pos": [self.pos_noun.id]}
+        pos_filter = SynsetFilter(data=data)
+        qs = pos_filter.qs
+        self.assertEqual(qs.count(), 4)
+
+    def test_synsets_status_filter(self):
+        data = {"status": [Synset.Status.COMPLETE]}
+        status_filter = SynsetFilter(data=data)
+        qs = status_filter.qs
+        self.assertIn(self.synset_d, qs)
+        self.assertNotIn(self.synset_b, qs)
+
+    def test_combined_filters(self):
+        data = {
+            "wordnet": [self.wordnet_2.id],
+            "pos": [self.pos_verb.id],
+            "status": [Synset.Status.COMPLETE],
+        }
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 1)
+        self.assertIn(self.synset_d, qs)
 
     def test_queue_by_wordnet_existing(self):
         with self.assertNumQueries(2):

@@ -87,13 +87,13 @@ def _synset_context(pk=None, synset=None):
     all_relations = Relation.objects.filter(
         Q(synset_from=pk) | Q(synset_to=pk)
     ).select_related("type", "synset_to", "synset_from")
-    relations = defaultdict(lambda: {"outgoing": [], "incoming": []})
+    relations = {"outgoing": defaultdict(list), "incoming": defaultdict(list)}
 
     for rel in all_relations:
         if synset == rel.synset_from:
-            relations[rel.type.name]["outgoing"].append(rel)
+            relations["outgoing"][rel.type.name].append(rel)
         else:
-            relations[rel.type.name]["incoming"].append(rel)
+            relations["incoming"][rel.type.name].append(rel)
 
     if synset.copied_from_id:
         source_synset = synset.copied_from
@@ -108,7 +108,7 @@ def _synset_context(pk=None, synset=None):
     context = {
         "synset": synset,
         "senses": senses,
-        "relations": dict(relations),
+        "relations": {direction: dict(types) for direction, types in relations.items()},
         "source_synset": source_synset,
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
     }

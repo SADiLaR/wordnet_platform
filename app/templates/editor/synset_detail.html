@@ -67,16 +67,7 @@
         <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
         {% include "editor/snippets/_sense_list.html" with senses=senses %}
 
-        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</h3>
-        {% for rel_type, directions in relations.items %}
-          <h4 class="text-body-tertiary small fw-semibold mb-1">{{ rel_type }}</h4>
-          {% for rel in directions.outgoing %}
-            <div>→ <a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}" class="link-primary">{{ rel.synset_to }}</a></div>
-          {% endfor %}
-          {% for rel in directions.incoming %}
-            <div>← <a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}" class="link-primary">{{ rel.synset_from }}</a></div>
-          {% endfor %}
-        {% endfor %}
+        {% include "editor/snippets/_relations.html" %}
 
       </div>
     </div>

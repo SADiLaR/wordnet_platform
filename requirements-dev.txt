@@ -1,5 +1,5 @@
 -r requirements.txt
-django-debug-toolbar==7.0.0
+django-debug-toolbar==7.1.1
 django-extensions==4.1
 pygraphviz==2.0.1
 pymysql==1.2.0

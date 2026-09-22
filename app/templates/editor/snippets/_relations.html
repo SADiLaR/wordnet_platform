@@ -1,0 +1,33 @@
+{% load i18n %}
+
+{% comment %}
+The <pre> blocks below render the following for outgoing relations:
+⊙ ─┬──▶ a : ...
+   ├──▶ b : ...
+   └──▶ c : ...
+
+and the following for incoming relations:
+⊙ ◀─┬── d : ...
+    ├── e : ...
+    └── f : ...
+{% endcomment %}
+
+<h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</h3>
+{% if relations.outgoing %}
+  <h4 class="text-body-secondary small fw-semibold mt-2 mb-1">{% trans "Outgoing" %}</h4>
+  {% for rel_type, rels in relations.outgoing.items %}
+    <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_type }}</h5>
+    <pre class="relation-tree mb-2">{% for rel in rels %}{% if forloop.first and forloop.last %}<span class="connector">⊙ ────▶ </span>{% elif forloop.first %}<span class="connector">⊙ ─┬──▶ </span>{% elif forloop.last %}
+<span class="connector">   └──▶ </span>{% else %}
+<span class="connector">   ├──▶ </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}">{{ rel.synset_to }}</a>{% endfor %}</pre>
+  {% endfor %}
+{% endif %}
+{% if relations.incoming %}
+  <h4 class="text-body-secondary small fw-semibold mt-3 mb-1">{% trans "Incoming" %}</h4>
+  {% for rel_type, rels in relations.incoming.items %}
+    <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_type }}</h5>
+    <pre class="relation-tree mb-2">{% for rel in rels %}{% if forloop.first and forloop.last %}<span class="connector">⊙ ◀──── </span>{% elif forloop.first %}<span class="connector">⊙ ◀─┬── </span>{% elif forloop.last %}
+<span class="connector">    └── </span>{% else %}
+<span class="connector">    ├── </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}">{{ rel.synset_from }}</a>{% endfor %}</pre>
+  {% endfor %}
+{% endif %}

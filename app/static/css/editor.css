@@ -7,6 +7,8 @@
   --bs-primary: var(--primary);
   --bs-primary-rgb: 26, 47, 105;
   --bs-blue: var(--primary);
+  --bs-link-color: var(--primary);
+  --bs-link-color-rgb: var(--bs-primary-rgb);
 
   /* Synset status colours */
   --stub-color: 128, 128, 128;
@@ -80,6 +82,19 @@ code {
   font-size: 0.75rem;
   color: rgb(var(--draft-color));
   margin-top: 0.25rem;
+}
+
+/* ── Relation tree ── */
+.relation-tree {
+  line-height: 1.1;
+}
+
+.relation-tree .connector {
+  font-size: 1.4em;
+}
+
+.relation-tree a {
+  font-family: var(--bs-body-font-family);
 }
 
 /* ── Inline editable forms ── */

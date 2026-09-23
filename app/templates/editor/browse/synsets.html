@@ -12,6 +12,23 @@
 <form method="get">
 <div class="row">
   <div class="col-md-8">
+    {# Search #}
+    <section aria-label="{% trans 'Search form' %}" class="limit-text-width mb-3">
+        <div id="search" class="col-auto">{# Target for link at bottom #}
+            <h2 class="fs-5 mt-2">{% trans "Search a term" %}</h2>
+        </div>
+        <div class="col mb-2">
+            <input type="search" name="{{ filter.form.search.name }}"
+                placeholder="{% trans 'Search...' %}"
+                class="form-control"
+                value="{{ request.GET.search }}">
+        </div>
+        <div class="col-auto d-flex flex-wrap align-items-center gap-2">
+            <input type="submit" class="btn btn-primary">
+            <a href="{% url 'editor:browse_synsets' %}" class="btn btn-secondary">
+            {% trans "Reset" %}</a>
+        </div>
+    </section>
   {% if page_obj %}
     <table class="table table-hover">
       <thead>

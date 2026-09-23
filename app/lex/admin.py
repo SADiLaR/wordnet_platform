@@ -62,7 +62,7 @@ class PartOfSpeechAdmin(admin.ModelAdmin):
 
 
 class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
-    list_filter = ["wordnet", "status"]
+    list_filter = ["wordnet", "status", "pos"]
     list_display = ["__str__", "pos"]
     search_fields = ["sense__word__text", "definition"]
     raw_id_fields = ("copied_from",)
@@ -271,6 +271,11 @@ class RelationTypeAdmin(admin.ModelAdmin):
 
 class RelationAdmin(SimpleHistoryAdmin):
     list_display = ["type", "synset_from", "synset_to"]
+    list_display_links = list_display
+    # Django goes wonky and joins with a lot of unnecessary tables without this:
+    list_select_related = ["type", "synset_from", "synset_to"]
+    list_filter = ["type", "synset_from__wordnet", "synset_from__pos"]
+    search_fields = ["synset_from__display_name", "synset_to__display_name"]
     raw_id_fields = ("synset_from", "synset_to")
 
 

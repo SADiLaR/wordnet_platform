@@ -9,18 +9,26 @@
   <li class="nav-item"><a class="nav-link active" href="{% url 'editor:browse_synsets' %}">{% trans "Synsets" %}</a></li>
   <li class="nav-item"><a class="nav-link disabled" href="#">{% trans "Words" %}</a></li>
 </ul>
-
-<div class="d-flex align-items-center gap-2 mb-3">
-  <span class="text-secondary small">{% trans "Wordnet:" %}</span>
-  {% for w in wordnets %}
-    <a href="{% url 'editor:browse_synsets_by_wordnet' wn_pk=w.pk %}"
-       class="btn btn-sm {% if wordnet.pk == w.pk %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-      {{ w.name }}
-    </a>
-  {% endfor %}
-</div>
-
-{% if wordnet %}
+<form method="get">
+<div class="row">
+  <div class="col-md-8">
+    {# Search #}
+    <section aria-label="{% trans 'Search form' %}" class="limit-text-width mb-3">
+        <div id="search" class="col-auto">{# Target for link at bottom #}
+            <h2 class="fs-5 mt-2">{% trans "Search a term" %}</h2>
+        </div>
+        <div class="col mb-2">
+            <input type="search" name="{{ filter.form.search.name }}"
+                placeholder="{% trans 'Search...' %}"
+                class="form-control"
+                value="{{ request.GET.search }}">
+        </div>
+        <div class="col-auto d-flex flex-wrap align-items-center gap-2">
+            <input type="submit" class="btn btn-primary">
+            <a href="{% url 'editor:browse_synsets' %}" class="btn btn-secondary">
+            {% trans "Reset" %}</a>
+        </div>
+    </section>
   {% if page_obj %}
     <table class="table table-hover">
       <thead>
@@ -45,5 +53,25 @@
   {% else %}
     <p class="text-secondary">{% trans "No synsets in this wordnet yet." %}</p>
   {% endif %}
-{% endif %}
+  </div>
+  <div class="col-md-4 ps-md-4">
+    {# Filters #}
+    {% spaceless %}
+    <section id="filters" aria-labelledby="filter-heading">
+                <h2 id="filter-heading" class="fs-5">{% trans "Filters" %}</h2>
+        <div class="row mb-2">
+            {% with form=filter.form %}
+            {% include "editor/browse/_search_filter.html" with field=form.pos summary=_("Filter by part of speech") %}
+            {% include "editor/browse/_search_filter.html" with field=form.wordnet summary=_("Filter by wordnet") %}
+            {% include "editor/browse/_search_filter.html" with field=form.status summary=_("Filter by status") %}
+            {% endwith %}
+        </div>
+        <input type="submit" class="btn btn-primary me-4">
+        <a href="{% url 'editor:browse_synsets'%}"
+            class="btn btn-secondary">{% trans "Reset" %}</a>
+    </section>
+    {% endspaceless %}
+  </div>
+</div>
+</form>
 {% endblock %}

@@ -31,6 +31,7 @@ class EditorViewTest(TestCase):
         self.pos_verb = PartOfSpeech.objects.create(name="verb")
 
         self.synset_a = Synset.objects.create(
+            display_name="Toets",
             definition="'n Toets synset",
             wordnet=self.wordnet,
             pos=self.pos_noun,
@@ -49,6 +50,7 @@ class EditorViewTest(TestCase):
         )
 
         self.synset_d = Synset.objects.create(
+            display_name="Toets Twee",
             definition="'n Synset in die tweede wordnet",
             wordnet=self.wordnet_2,
             pos=self.pos_verb,
@@ -71,7 +73,7 @@ class EditorViewTest(TestCase):
         )
 
         self.word_1 = Word.objects.create(
-            text="toets", pos=self.pos_noun, language=language
+            text="toets woord", pos=self.pos_noun, language=language
         )
 
         self.sense_1 = Sense.objects.create(word=self.word_1, synset=self.synset_b)
@@ -164,6 +166,53 @@ class EditorViewTest(TestCase):
         self.assertEqual(qs.count(), 1)
         self.assertIn(self.synset_d, qs)
         self.assertNotIn(self.synset_b, qs)
+
+    def test_browse_synsets_search(self):
+        with self.assertNumQueries(4):
+            response = self.client.get(self._get_browse_url(), {"search": "toets"})
+        self.assertEqual(response.status_code, 200)
+
+    def test_search_filter_definition(self):
+        data = {"search": "Addisionele"}
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first(), self.synset_c)
+
+    def test_search_filter_order(self):
+        data = {"search": "toets"}
+        self.sense_3 = Sense.objects.create(word=self.word_1, synset=self.synset_a)
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 4)
+        self.assertEqual(qs[0], self.synset_a)
+        self.assertEqual(qs[1], self.synset_b)
+        self.assertEqual(qs[2], self.synset_c)
+
+    def test_search_filter_combined(self):
+        data = {
+            "search": "toets",
+            "wordnet": [self.wordnet.id],
+        }
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 3)
+        self.assertIn(self.synset_a, qs)
+        self.assertNotIn(self.synset_d, qs)
+        with self.assertNumQueries(5):
+            response = self.client.get(self._get_browse_url(), data)
+        self.assertEqual(response.status_code, 200)
+
+    def test_search_unaccent(self):
+        self.synset_a.definition = "Die bokkie blêr"
+        self.synset_a.save(update_fields=["definition"])
+        data = {
+            "search": "bler",
+        }
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 1)
+        self.assertIn(self.synset_a, qs)
 
     def test_queue_by_wordnet_existing(self):
         with self.assertNumQueries(2):

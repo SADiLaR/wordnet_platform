@@ -31,6 +31,7 @@ class EditorViewTest(TestCase):
         self.pos_verb = PartOfSpeech.objects.create(name="verb")
 
         self.synset_a = Synset.objects.create(
+            display_name="Toets",
             definition="'n Toets synset",
             wordnet=self.wordnet,
             pos=self.pos_noun,
@@ -49,6 +50,7 @@ class EditorViewTest(TestCase):
         )
 
         self.synset_d = Synset.objects.create(
+            display_name="Toets Twee",
             definition="'n Synset in die tweede wordnet",
             wordnet=self.wordnet_2,
             pos=self.pos_verb,
@@ -71,7 +73,7 @@ class EditorViewTest(TestCase):
         )
 
         self.word_1 = Word.objects.create(
-            text="toets", pos=self.pos_noun, language=language
+            text="toets woord", pos=self.pos_noun, language=language
         )
 
         self.sense_1 = Sense.objects.create(word=self.word_1, synset=self.synset_b)
@@ -160,6 +162,32 @@ class EditorViewTest(TestCase):
         qs = synset_filter.qs
         self.assertEqual(qs.count(), 1)
         self.assertIn(self.synset_d, qs)
+
+    def test_search_filter_definition(self):
+        data = {"search": "Addisionele"}
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first(), self.synset_c)
+
+    def test_search_filter_order(self):
+        data = {"search": "toets"}
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 4)
+        self.assertEqual(qs[0], self.synset_a)
+        self.assertEqual(qs[1], self.synset_d)
+        self.assertEqual(qs[2], self.synset_b)
+
+    def test_search_filter_combined(self):
+        data = {
+            "search": "toets",
+            "wordnet": [self.wordnet.id],
+        }
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 3)
+        self.assertNotIn(self.synset_d, qs)
 
     def test_queue_by_wordnet_existing(self):
         with self.assertNumQueries(2):

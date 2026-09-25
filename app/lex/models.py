@@ -4,6 +4,8 @@ from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
 
+from .managers import SynsetManager, WordManager
+
 SYNSET_STR_MAX_LENGTH = 80
 MAX_WORDS = 3
 
@@ -124,6 +126,8 @@ class Synset(models.Model):
     def short_display_name(self):
         return self.display_name or f"({self.pk})"
 
+    objects = SynsetManager()
+
 
 class Word(models.Model):
     text = models.CharField(max_length=100, verbose_name=_("lemma"))
@@ -167,6 +171,8 @@ class Word(models.Model):
         for synset in synsets_to_update:
             synset.update_display_name()
         return deletion
+
+    objects = WordManager()
 
 
 class Sense(models.Model):

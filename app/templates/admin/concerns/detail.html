@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <p>
+        <a href="{% url 'concerns_report' %}?wordnet={{ wordnet.pk }}">
+            {% trans "Back to concerns" %}</a>
+    </p>
+    <h1>{{ concern.name }}</h1>
+    {% if wordnet %}
+        <p>
+            <strong>{% trans "Wordnet:" %}</strong>
+            {{ wordnet.name }}
+        </p>
+    {% endif %}
+    <div class="results">
+        <table id="result_list">
+            <thead>
+                <tr>
+                    <th scope="col">{% trans "ID" %}</th>
+                    <th scope="col">{% trans "Object" %}</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                    <tr><td>{{ item.obj.pk }}</td>
+                        <td>{{ item.obj }}</td>
+                        <td>
+                            <a href="{{ item.admin_url }}">{% trans "View" %}</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="3">{% trans "No concerns found." %}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% if page_obj.paginator.num_pages > 1 %}
+    <p class="paginator">
+        {% for page in page_range %}
+            {% if page == page_obj.paginator.ELLIPSIS %}
+                …
+            {% elif page == page_obj.number %}
+                <span class="this-page">{{ page }}</span>
+            {% else %}
+                <a href="?page={{ page }}{% if wordnet %}&wordnet={{ wordnet.pk }}{% endif %}">
+                    {{ page }}
+                </a>
+            {% endif %}
+        {% endfor %}
+            {% blocktranslate trimmed count count=page_obj.paginator.count %}
+                {{ count }} concern
+            {% plural %}
+                {{ count }} concerns
+            {% endblocktranslate %}
+    </p>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <h1>{% trans "Wordnet Data Concerns" %}</h1>
+    <p>
+        {% trans "Potential data-quality issues grouped by Wordnet and problem type." %}
+    </p>
+{% for wordnet_group in wordnet_groups %}
+    <details
+        class="mb-4"
+        {% if selected_wordnet == wordnet_group.wordnet.pk|stringformat:"s" %}
+            open
+        {% endif %}
+    >
+        <summary>
+            <strong>{{ wordnet_group.wordnet.name }}</strong>
+            —
+            {% blocktranslate trimmed count count=wordnet_group.total_count %}
+                {{ count }} concern
+            {% plural %}
+                {{ count }} concerns
+            {% endblocktranslate %}
+        </summary>
+        <div class="results">
+            {% for group in wordnet_group.groups %}
+                <h3>{{ group.label }}</h3>
+                <table id="result_list">
+                    <thead>
+                        <tr>
+                            <th>{% trans "Concern" %}</th>
+                            <th>{% trans "Count" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for concern in group.concerns %}
+                            <tr>
+                                <td><a href="{% url 'concerns_detail' concern.model_name concern.key %}?wordnet={{ wordnet_group.wordnet.pk }}">
+                                    {{ concern.name }}</a>
+                                </td>
+                                <td>{{ concern.count }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% empty %}
+                <p>No concerns.</p>
+            {% endfor %}
+        </div>
+    </details>
+{% endfor %}
+</div>
+{% endblock %}

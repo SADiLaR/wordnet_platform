@@ -142,11 +142,14 @@ class EditorViewTest(TestCase):
         pos_filter = SynsetFilter(data=data)
         qs = pos_filter.qs
         self.assertEqual(qs.count(), 4)
+        self.assertIn(self.synset_a, qs)
+        self.assertNotIn(self.synset_b, qs)
 
     def test_synsets_status_filter(self):
         data = {"status": [Synset.Status.COMPLETE]}
         status_filter = SynsetFilter(data=data)
         qs = status_filter.qs
+        self.assertEqual(qs.count(), 1)
         self.assertIn(self.synset_d, qs)
         self.assertNotIn(self.synset_b, qs)
 
@@ -160,6 +163,7 @@ class EditorViewTest(TestCase):
         qs = synset_filter.qs
         self.assertEqual(qs.count(), 1)
         self.assertIn(self.synset_d, qs)
+        self.assertNotIn(self.synset_b, qs)
 
     def test_queue_by_wordnet_existing(self):
         with self.assertNumQueries(2):

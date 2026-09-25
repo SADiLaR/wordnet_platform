@@ -67,7 +67,9 @@
         <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
         {% include "editor/snippets/_sense_list.html" with senses=senses %}
 
-        {% include "editor/snippets/_relations.html" %}
+        <div id="relations-section">
+          {% include "editor/snippets/_relations.html" %}
+        </div>
 
       </div>
     </div>

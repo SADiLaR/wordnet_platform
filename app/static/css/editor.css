@@ -84,6 +84,18 @@ code {
   margin-top: 0.25rem;
 }
 
+/* ── Add buttons ── */
+.btn-add {
+  color: rgb(var(--draft-color));
+  border-color: rgb(var(--draft-color));
+}
+
+.btn-add:hover {
+  background-color: rgba(var(--draft-color), 0.1);
+  border-color: rgb(var(--draft-color));
+  color: rgb(var(--draft-color));
+}
+
 /* ── Relation tree ── */
 .relation-tree {
   line-height: 1.1;

@@ -119,6 +119,12 @@ class EditorViewTest(TestCase):
     def _get_synset_definition_url_nonexist(self):
         return reverse("editor:synset_definition", kwargs={"pk": 99999})
 
+    def _get_add_relation_url(self, synset_obj):
+        return reverse("editor:add_relation_htmx", kwargs={"pk": synset_obj.pk})
+
+    def _get_clear_url(self):
+        return reverse("editor:clear_htmx")
+
     def test_browse_synsets_by_wordnet_existing(self):
         with self.assertNumQueries(4):
             response = self.client.get(self._get_browse_wn_url())
@@ -306,6 +312,80 @@ class EditorViewTest(TestCase):
                 self._get_synset_definition_url(self.synset_a),
             )
         self.assertEqual(response.status_code, 405)
+
+    def test_add_relation_htmx_get_no_type(self):
+        response = self.client.get(self._get_add_relation_url(self.synset_a))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_add_relation_new.html")
+        self.assertIn("types", response.context)
+
+    def test_add_relation_htmx_get_with_type(self):
+        response = self.client.get(
+            self._get_add_relation_url(self.synset_a),
+            {"type": "hyper", "direction": "outgoing"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_add_relation.html")
+
+    def test_add_relation_htmx_get_with_search(self):
+        response = self.client.get(
+            self._get_add_relation_url(self.synset_a),
+            {"type": "hyper", "direction": "outgoing", "q": "toets"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_add_relation.html")
+        self.assertIsNotNone(response.context["synsets"])
+
+    def test_add_relation_htmx_get_search_no_type(self):
+        response = self.client.get(
+            self._get_add_relation_url(self.synset_a),
+            {"q": "toets"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_add_relation_new.html")
+        self.assertIsNotNone(response.context["synsets"])
+
+    def test_add_relation_htmx_post_outgoing(self):
+        response = self.client.post(
+            self._get_add_relation_url(self.synset_a),
+            {"type": "hyper", "direction": "outgoing", "target_pk": self.synset_d.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Relation.objects.filter(
+                synset_from=self.synset_a, synset_to=self.synset_d
+            ).exists()
+        )
+
+    def test_add_relation_htmx_post_incoming(self):
+        response = self.client.post(
+            self._get_add_relation_url(self.synset_a),
+            {"type": "hyper", "direction": "incoming", "target_pk": self.synset_d.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Relation.objects.filter(
+                synset_from=self.synset_d, synset_to=self.synset_a
+            ).exists()
+        )
+
+    def test_add_relation_htmx_post_invalid_direction(self):
+        response = self.client.post(
+            self._get_add_relation_url(self.synset_a),
+            {"type": "hyper", "direction": "sideways", "target_pk": self.synset_d.pk},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_clear_htmx_valid(self):
+        response = self.client.get(
+            self._get_clear_url(), {"target_id": "add-relation-new"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"")
+
+    def test_clear_htmx_missing_target_id(self):
+        response = self.client.get(self._get_clear_url())
+        self.assertEqual(response.status_code, 400)
 
 
 class AssignmentModelTest(TestCase):

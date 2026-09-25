@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
 
-SYNSET_STR_MAX_LENGTH = 100
+SYNSET_STR_MAX_LENGTH = 80
 MAX_WORDS = 3
 
 

@@ -1,0 +1,21 @@
+{% load i18n %}
+<div class="relation-results">
+  {% if synsets is not None %}
+    {% if synsets %}
+      <ul class="dropdown-menu show w-100">
+        {% for result in synsets %}
+          <li>
+            <button type="button" class="dropdown-item"
+                    hx-post="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
+                    hx-target="#relations-section"
+                    hx-vals='{"target_pk": "{{ result.pk }}", "type": "{{ type }}", "direction": "{{ direction }}"}'>
+              {{ result }}
+            </button>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-secondary small mt-2 mb-0">{% trans "No synsets found." %}</p>
+    {% endif %}
+  {% endif %}
+</div>

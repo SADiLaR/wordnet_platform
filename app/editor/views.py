@@ -3,11 +3,11 @@ from collections import defaultdict
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q, prefetch_related_objects
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 
-from lex.models import Relation, Synset, Wordnet
+from lex.models import Relation, RelationType, Synset, Wordnet
 
 from .forms import DefinitionForm
 
@@ -192,3 +192,67 @@ def synset_definition(request, pk):
             return render(request, "editor/synset_detail.html", context)
 
     return HttpResponseNotAllowed(["POST"])
+
+
+def add_relation_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+
+    if request.method == "GET":
+        if r_type := request.GET.get("type"):
+            template = "editor/snippets/_add_relation.html"
+        else:
+            template = "editor/snippets/_add_relation_new.html"
+
+        context = {
+            "synset": synset,
+            "type": r_type,
+            "direction": request.GET.get("direction"),
+            "types": RelationType.objects.all(),
+        }
+
+        if q := request.GET.get("q"):
+            synsets = Synset.objects.filter(
+                Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
+                wordnet=synset.wordnet,
+            ).distinct()
+
+            context["synsets"] = synsets
+            context["q"] = q
+        return render(
+            request,
+            template,
+            context,
+        )
+    if request.method == "POST":
+        type_name = request.POST.get("type")
+        direction = request.POST.get("direction")
+        target_synset_pk = request.POST.get("target_pk")
+        target_synset = get_object_or_404(Synset, pk=target_synset_pk)
+
+        if direction == "outgoing":
+            synset_from = synset
+            synset_to = target_synset
+        elif direction == "incoming":
+            synset_from = target_synset
+            synset_to = synset
+        else:
+            return HttpResponse(status=400)
+
+        rel_type = get_object_or_404(RelationType, name=type_name)
+        Relation.objects.create(
+            synset_from=synset_from, synset_to=synset_to, type=rel_type
+        )
+        return render(
+            request,
+            "editor/snippets/_relations.html",
+            _synset_context(pk),
+        )
+
+
+def clear_htmx(request):
+
+    if request.method == "GET":
+        target_id = request.GET.get("target_id")
+        if not target_id:
+            return HttpResponse(status=400)
+        return HttpResponse("", content_type="text/html")

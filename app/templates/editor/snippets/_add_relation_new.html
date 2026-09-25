@@ -1,0 +1,30 @@
+{% load i18n %}
+<form class="mt-2" method="get" action="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
+      hx-get="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
+      hx-trigger="input delay:300ms"
+      hx-target="next .relation-results"
+      hx-select=".relation-results"
+      hx-swap="outerHTML">
+  <div class="d-flex gap-2 mb-2">
+    <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Direction' %}">
+      <input type="radio" class="btn-check" name="direction" id="dir-out" value="outgoing" autocomplete="off" {% if direction != "incoming" %}checked{% endif %}>
+      <label class="btn btn-outline-secondary" for="dir-out">──▶&#xFE0E;</label>
+      <input type="radio" class="btn-check" name="direction" id="dir-in" value="incoming" autocomplete="off" {% if direction == "incoming" %}checked{% endif %}>
+      <label class="btn btn-outline-secondary" for="dir-in">◀&#xFE0E;──</label>
+    </div>
+    <select name="type" class="form-select form-select-sm">
+      <option value="">{% trans "— relation type —" %}</option>
+      {% for t in types %}
+        <option value="{{ t.name }}" {% if type == t.name %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="d-flex gap-2">
+    <input type="text" name="q" class="form-control form-control-sm" placeholder="{% trans 'Search synsets…' %}" value="{{ q }}">
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            hx-get="{% url 'editor:clear_htmx' %}?target_id=add-relation-new"
+            hx-target="#add-relation-new"
+            hx-swap="innerHTML">{% trans "Cancel" %}</button>
+  </div>
+</form>
+{% include "editor/snippets/_relation_results.html" %}

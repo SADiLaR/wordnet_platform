@@ -51,15 +51,14 @@ def browse_synsets(request):
         Synset.objects.all().select_related("copied_from").order_by("display_name")
     )
     f = SynsetFilter(request.GET, queryset=synsets)
-    query_params = request.GET.copy()
-    query_params.pop("page", None)
+    url_params = request.GET.copy()
     paginator = Paginator(f.qs, 20)
-    page_number = request.GET.get("page")
+    page_number = url_params.pop("page", None)
     page_obj = paginator.get_page(page_number)
 
     context["page_obj"] = page_obj
     context["filter"] = f
-    context["url_params"] = query_params.urlencode()
+    context["url_params"] = url_params.urlencode()
 
     return render(
         request,

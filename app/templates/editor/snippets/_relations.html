@@ -4,30 +4,57 @@
 The <pre> blocks below render the following for outgoing relations:
 ⊙ ─┬──▶ a : ...
    ├──▶ b : ...
-   └──▶ c : ...
+   └──▶ +
 
 and the following for incoming relations:
 ⊙ ◀─┬── d : ...
     ├── e : ...
-    └── f : ...
+    └── +
 {% endcomment %}
 
 <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</h3>
+{% if error %}<div class="alert alert-danger py-1 px-2 small mt-1" role="alert">{{ error }}</div>{% endif %}
 {% if relations.outgoing %}
   <h4 class="text-body-secondary small fw-semibold mt-2 mb-1">{% trans "Outgoing" %}</h4>
   {% for rel_type, rels in relations.outgoing.items %}
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_type }}</h5>
-    <pre class="relation-tree mb-2">{% for rel in rels %}{% if forloop.first and forloop.last %}<span class="connector">⊙ ────▶ </span>{% elif forloop.first %}<span class="connector">⊙ ─┬──▶ </span>{% elif forloop.last %}
-<span class="connector">   └──▶ </span>{% else %}
-<span class="connector">   ├──▶ </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}">{{ rel.synset_to }}</a>{% endfor %}</pre>
+    {% comment %}&#xFE0E; is the Unicode text presentation selector — it forces ▶/◀ to render as plain text glyphs rather than coloured emoji{% endcomment %}
+    <pre class="relation-tree mb-2">{% for rel in rels %}{% if forloop.first %}<span class="connector" aria-hidden="true">⊙ ─┬──▶&#xFE0E; </span>{% else %}
+<span class="connector" aria-hidden="true">   ├──▶&#xFE0E; </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}">{{ rel.synset_to }}</a>{% endfor %}
+<span class="connector" aria-hidden="true">   └──▶&#xFE0E; </span><button type="button"
+        class="btn btn-sm btn-add py-0"
+        aria-label="{% trans 'Add' %}"
+        hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}?type={{ rel_type }}&direction=outgoing"
+        hx-target="#add-outgoing-{{ rel_type }}">+</button></pre>
+    <div id="add-outgoing-{{ rel_type }}-container">
+      <div id="add-outgoing-{{ rel_type }}"></div>
+      <div id="add-outgoing-{{ rel_type }}-results"></div>
+    </div>
   {% endfor %}
 {% endif %}
 {% if relations.incoming %}
   <h4 class="text-body-secondary small fw-semibold mt-3 mb-1">{% trans "Incoming" %}</h4>
   {% for rel_type, rels in relations.incoming.items %}
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_type }}</h5>
-    <pre class="relation-tree mb-2">{% for rel in rels %}{% if forloop.first and forloop.last %}<span class="connector">⊙ ◀──── </span>{% elif forloop.first %}<span class="connector">⊙ ◀─┬── </span>{% elif forloop.last %}
-<span class="connector">    └── </span>{% else %}
-<span class="connector">    ├── </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}">{{ rel.synset_from }}</a>{% endfor %}</pre>
+    <pre class="relation-tree mb-2">{% for rel in rels %}{% if forloop.first %}<span class="connector" aria-hidden="true">⊙ ◀&#xFE0E;─┬── </span>{% else %}
+<span class="connector" aria-hidden="true">    ├── </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}">{{ rel.synset_from }}</a>{% endfor %}
+<span class="connector" aria-hidden="true">    └── </span><button type="button"
+        class="btn btn-sm btn-add py-0"
+        aria-label="{% trans 'Add' %}"
+        hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}?type={{ rel_type }}&direction=incoming"
+        hx-target="#add-incoming-{{ rel_type }}">+</button></pre>
+    <div id="add-incoming-{{ rel_type }}-container">
+        <div id="add-incoming-{{ rel_type }}"></div>
+        <div id="add-incoming-{{ rel_type }}-results"></div>
+    </div>
   {% endfor %}
 {% endif %}
+<button type="button"
+        class="btn btn-sm btn-add mt-2"
+        aria-label="{% trans 'Add relation' %}"
+        hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}"
+        hx-target="#add-relation-new">+ {% trans "Add relation" %}</button>
+<div id="add-relation-new-container">
+    <div id="add-relation-new"></div>
+    <div id="add-relation-new-results"></div>
+</div>

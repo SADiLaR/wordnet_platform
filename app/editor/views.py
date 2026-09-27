@@ -17,6 +17,10 @@ from .forms import DefinitionForm
 QUERY_LENGTH_SPLITS = (3, 6)
 
 
+def about(request):
+    return render(request, "editor/about.html")
+
+
 def _guess_princeton_id(id_code):
     if id_code and id_code.startswith("ENG20-"):
         return id_code[6:]

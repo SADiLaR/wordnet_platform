@@ -22,6 +22,10 @@ code {
   color: var(--primary-light);
 }
 
+.limit-text-width {
+  max-width: 44rem;
+}
+
 /* ── Button overrides ── */
 .btn-primary {
   --bs-btn-bg: var(--primary);

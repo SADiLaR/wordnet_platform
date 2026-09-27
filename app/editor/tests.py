@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from editor.filters import SynsetFilter
@@ -17,6 +17,26 @@ from lex.models import (
     Word,
     Wordnet,
 )
+
+
+class AboutPageTest(SimpleTestCase):
+    def test_about_page(self):
+        response = self.client.get(reverse("editor:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/about.html")
+        self.assertContains(response, "About the African Wordnet Project")
+        self.assertContains(response, "https://africanwordnet.wordpress.com/")
+        self.assertContains(response, "https://sadilar.org/en/unisa/")
+        self.assertContains(response, "About SADiLaR")
+        self.assertContains(response, "https://github.com/SADiLaR/wordnet_platform/")
+        self.assertContains(response, "Marissa Griesel")
+        self.assertContains(response, 'let name = "Marissa.Griesel";')
+        self.assertContains(response, 'let domain = "nwu.ac.za";')
+        self.assertNotContains(response, "SADiLaR conducted an audit")
+
+    def test_about_url(self):
+        self.assertEqual(reverse("editor:about"), "/about/")
 
 
 class EditorViewTest(TestCase):

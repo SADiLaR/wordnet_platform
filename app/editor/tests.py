@@ -19,6 +19,15 @@ from lex.models import (
 )
 
 
+class FrontPageTest(SimpleTestCase):
+    def test_front_page(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/front_page.html")
+        self.assertContains(response, f'href="{reverse("editor:browse_synsets")}"')
+
+
 class AboutPageTest(SimpleTestCase):
     def test_about_page(self):
         response = self.client.get(reverse("editor:about"))

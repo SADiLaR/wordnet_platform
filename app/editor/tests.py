@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from editor.filters import SynsetFilter
@@ -17,6 +17,15 @@ from lex.models import (
     Word,
     Wordnet,
 )
+
+
+class FrontPageTest(SimpleTestCase):
+    def test_front_page(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/front_page.html")
+        self.assertContains(response, f'href="{reverse("editor:browse_synsets")}"')
 
 
 class EditorViewTest(TestCase):

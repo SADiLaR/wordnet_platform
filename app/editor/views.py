@@ -13,6 +13,10 @@ from .filters import SynsetFilter
 from .forms import DefinitionForm
 
 
+def front_page(request):
+    return render(request, "editor/front_page.html")
+
+
 def _guess_princeton_id(id_code):
     if id_code and id_code.startswith("ENG20-"):
         return id_code[6:]

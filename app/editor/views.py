@@ -48,12 +48,15 @@ def browse_synsets(request):
     wordnets = Wordnet.objects.all()
     context = {"wordnets": wordnets}
     synsets = (
-        Synset.objects.all().select_related("copied_from").order_by("display_name")
+        Synset.objects.all()
+        .select_related("copied_from")
+        .order_by("display_name", "pk")
     )
     f = SynsetFilter(request.GET, queryset=synsets)
     url_params = request.GET.copy()
     paginator = Paginator(f.qs, 20)
-    page_number = url_params.pop("page", None)
+    page_number = request.GET.get("page")
+    url_params.pop("page", None)
     page_obj = paginator.get_page(page_number)
 
     context["page_obj"] = page_obj

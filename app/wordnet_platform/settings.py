@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "simple_history",
     "nested_admin",
     "django_htmx",
+    "django_filters",
 ]
 if DEBUG:
     INSTALLED_APPS += [

@@ -57,12 +57,17 @@ class LanguageAdmin(admin.ModelAdmin):
         return super().get_readonly_fields(request, obj)
 
 
+class PartOfSpeechAdmin(admin.ModelAdmin):
+    ordering = ["name"]
+
+
 class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
-    list_filter = ["wordnet", "status"]
+    list_filter = ["wordnet", "status", "pos"]
     list_display = ["__str__", "pos"]
     search_fields = ["sense__word__text", "definition"]
     raw_id_fields = ("copied_from",)
     exclude = ["display_name"]
+    ordering = ["display_name"]
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
@@ -242,6 +247,7 @@ class WordAdmin(admin.ModelAdmin):
     list_filter = ["language", "pos"]
     list_display = ["text", "pos"]
     search_fields = ["text"]
+    ordering = ["text"]
 
     class SenseInline(NoRelatedWidgetsInlineMixin, admin.TabularInline):
         model = Sense
@@ -256,10 +262,20 @@ class WordAdmin(admin.ModelAdmin):
 
 class WordnetAdmin(admin.ModelAdmin):
     list_display = ["name", "language"]
+    ordering = ["name"]
+
+
+class RelationTypeAdmin(admin.ModelAdmin):
+    ordering = ["name"]
 
 
 class RelationAdmin(SimpleHistoryAdmin):
     list_display = ["type", "synset_from", "synset_to"]
+    list_display_links = list_display
+    # Django goes wonky and joins with a lot of unnecessary tables without this:
+    list_select_related = ["type", "synset_from", "synset_to"]
+    list_filter = ["type", "synset_from__wordnet", "synset_from__pos"]
+    search_fields = ["synset_from__display_name", "synset_to__display_name"]
     raw_id_fields = ("synset_from", "synset_to")
 
 
@@ -267,6 +283,6 @@ admin.site.register(Language, LanguageAdmin)
 admin.site.register(Wordnet, WordnetAdmin)
 admin.site.register(Synset, SynsetAdmin)
 admin.site.register(Word, WordAdmin)
-admin.site.register(PartOfSpeech)
-admin.site.register(RelationType)
+admin.site.register(PartOfSpeech, PartOfSpeechAdmin)
+admin.site.register(RelationType, RelationTypeAdmin)
 admin.site.register(Relation, RelationAdmin)

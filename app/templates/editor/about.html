@@ -1,0 +1,105 @@
+{% extends "editor/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "About" %} — {% trans "AfWN Editor" %}{% endblock %}
+
+{% block content %}
+{% spaceless %}
+
+<script>
+  {# Try to prevent a little bit of spam by not just dangling the email in the HTML for all to see #}
+  function showEmail() {
+    let name = "Marissa.Griesel";
+    let domain = "nwu.ac.za";
+    let email = name + "@" + domain;
+    let emailElt = document.getElementById("wordnet-email");
+    emailElt.innerText = email;
+    emailElt.href = `mailto:${email}?subject=African+Wordnet+query`;
+  }
+
+  // https://developer.mozilla.org/en-US/docs/Web/API/Document/DOMContentLoaded_event#checking_whether_loading_is_already_complete
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", showEmail)
+  } else {
+    showEmail()
+  }
+</script>
+
+<div class="m-4 d-flex flex-column gap-3">
+  <h1 id="main-heading" class="card-title">{% trans "About" %}</h1>
+
+  <div class="card row p-3">
+    <h2 class="card-title">{% trans "About the African Wordnet Project" %}</h2>
+
+    <div class="card-body limit-text-width">
+      <p>
+        {% blocktrans with project_url="https://africanwordnet.wordpress.com/" collaboration_url="https://sadilar.org/en/unisa/" trimmed %}
+          Learn more about the <a href="{{ project_url }}">African Wordnet Project</a> and the
+          <a href="{{ collaboration_url }}">collaboration between SADiLaR and UNISA</a>.
+        {% endblocktrans %}
+      </p>
+    </div>
+  </div>
+
+  <div class="card row p-3">
+    <h2 class="card-title">{% trans "About SADiLaR" %}</h2>
+
+    <div class="card-body limit-text-width">
+      <p>
+        {% blocktrans trimmed %}
+          The South African Centre for Digital Language Resources (SADiLaR) is a national research infrastructure
+          that aims to ensure a digital future for our official languages. It supports researchers in the fields
+          of digital humanities and social sciences and also assists institutions in their language implementation
+          plans.
+        {% endblocktrans %}
+        <a href="https://sadilar.org">{% trans "Read more about SADiLaR." %}</a>
+      </p>
+
+      <p>
+        {% blocktrans trimmed %}
+          This wordnet platform is developed by SADiLaR to enable the development and review of the wordnets developed.
+        {% endblocktrans %}
+        {% blocktrans with url="https://github.com/SADiLaR/wordnet_platform/" trimmed %}
+          The code of this web platform is available on <a href="{{ url }}">GitHub</a>.
+        {% endblocktrans %}
+      </p>
+    </div>
+  </div>
+
+  <div id="contact" class="card p-3 row">
+    <h2 class="card-title">{% trans "Contact" %}</h2>
+    <div class="row gx-lg-5">
+      <div class="col-md-auto contact-info ps-3">
+        <p>
+          {% trans "Marissa Griesel" %}
+        </p>
+
+        {# This is loaded in by JS to try avoid some simple spam scrapers #}
+        <p>
+          <a id="wordnet-email">
+            <noscript>
+              {% trans "Please enable JavaScript to view the email address (this is to avoid spammers)" %}
+            </noscript>
+          </a>
+        </p>
+      </div>
+
+      {# Display an hr only when the md (medium breakpoint [1]) is reached. #}
+      {# This makes it clear that Marissa Griesel's contact details are separate from SADiLaR's #}
+      {# [1]: https://getbootstrap.com/docs/5.2/layout/breakpoints/ #}
+      <hr class="d-md-none"/>
+
+      <div class="col-md-auto contact-info">
+        <p>
+          {% trans "South African Centre for Digital Language Resources (SADiLaR)" %}
+        </p>
+
+        <p>
+          <a href="https://sadilar.org/en/contact-us/">{% trans "Contact SADiLaR" %}</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endspaceless %}
+{% endblock %}

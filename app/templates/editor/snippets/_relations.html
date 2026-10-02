@@ -24,7 +24,7 @@ and the following for incoming relations:
 <span class="connector" aria-hidden="true">   └──▶&#xFE0E; </span><button type="button"
         class="btn btn-sm btn-add py-0"
         aria-label="{% trans 'Add' %}"
-        hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}?type={{ rel_type }}&direction=outgoing"
+        hx-get="{% url 'editor:add_relation_form_htmx' pk=synset.pk %}?type={{ rel_type }}&direction=outgoing"
         hx-target="#add-outgoing-{{ rel_type }}">+</button></pre>
     <div id="add-outgoing-{{ rel_type }}-container">
       <div id="add-outgoing-{{ rel_type }}"></div>
@@ -41,7 +41,7 @@ and the following for incoming relations:
 <span class="connector" aria-hidden="true">    └── </span><button type="button"
         class="btn btn-sm btn-add py-0"
         aria-label="{% trans 'Add' %}"
-        hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}?type={{ rel_type }}&direction=incoming"
+        hx-get="{% url 'editor:add_relation_form_htmx' pk=synset.pk %}?type={{ rel_type }}&direction=incoming"
         hx-target="#add-incoming-{{ rel_type }}">+</button></pre>
     <div id="add-incoming-{{ rel_type }}-container">
         <div id="add-incoming-{{ rel_type }}"></div>
@@ -52,7 +52,7 @@ and the following for incoming relations:
 <button type="button"
         class="btn btn-sm btn-add mt-2"
         aria-label="{% trans 'Add relation' %}"
-        hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}"
+        hx-get="{% url 'editor:add_relation_form_htmx' pk=synset.pk %}"
         hx-target="#add-relation-new">+ {% trans "Add relation" %}</button>
 <div id="add-relation-new-container">
     <div id="add-relation-new"></div>

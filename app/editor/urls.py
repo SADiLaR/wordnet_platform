@@ -31,9 +31,14 @@ urlpatterns = [
         name="add_relation_htmx",
     ),
     path(
-        "synsets/<int:pk>/relations/suggest/",
-        views.suggest_relation_htmx,
-        name="suggest_relation_htmx",
+        "synsets/<int:pk>/relations/form/",
+        views.add_relation_form_htmx,
+        name="add_relation_form_htmx",
+    ),
+    path(
+        "synsets/<int:pk>/relations/search/",
+        views.search_synsets_htmx,
+        name="search_synsets_htmx",
     ),
     path(
         "clear/",

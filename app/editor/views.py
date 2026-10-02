@@ -201,7 +201,7 @@ def synset_definition(request, pk):
 
 
 @require_GET
-def suggest_relation_htmx(request, pk):
+def add_relation_form_htmx(request, pk):
     synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
 
     if r_type := request.GET.get("type"):
@@ -218,7 +218,15 @@ def suggest_relation_htmx(request, pk):
         "types": RelationType.objects.all().order_by("name"),
         "cancel_target": cancel_target,
     }
+    return render(
+        request,
+        template,
+        context,
+    )
 
+
+def search_synsets_htmx(request, pk):
+    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
     if q := request.GET.get("q"):
         # TODO review and improve search efficiency
         if len(q) > QUERY_LENGTH_SPLITS[1]:
@@ -248,11 +256,6 @@ def suggest_relation_htmx(request, pk):
             "editor/snippets/_relation_results.html",
             context,
         )
-    return render(
-        request,
-        template,
-        context,
-    )
 
 
 @require_POST

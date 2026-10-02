@@ -1,6 +1,6 @@
 {% load i18n %}
 <form class="mt-2"
-      hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}"
+      hx-post="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
       hx-trigger="input delay:300ms[target.value.length > 0]"
       hx-target="#add-relation-new-results"
       hx-swap="innerHTML">

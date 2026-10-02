@@ -2,7 +2,7 @@
 <form class="mt-2"
       hx-post="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
       hx-target="#relations-section"
-      hx-swap="innerHTML">
+>
     <div class="d-flex gap-2 mb-2">
         <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Direction' %}">
             <input type="radio"

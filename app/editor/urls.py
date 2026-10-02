@@ -25,4 +25,19 @@ urlpatterns = [
         views.synset_definition,
         name="synset_definition",
     ),
+    path(
+        "synsets/<int:pk>/relations/add/",
+        views.add_relation_htmx,
+        name="add_relation_htmx",
+    ),
+    path(
+        "synsets/<int:pk>/relations/suggest/",
+        views.suggest_relation_htmx,
+        name="suggest_relation_htmx",
+    ),
+    path(
+        "clear/",
+        views.clear_htmx,
+        name="clear_htmx",
+    ),
 ]

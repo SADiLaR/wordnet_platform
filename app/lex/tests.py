@@ -97,8 +97,7 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(
             str(self.synset),
-            "igama : A unit that stands on its own according to the intuition of language "
-            "users. The ...",
+            "igama : A unit that stands on its own according to the intuition of ...",
         )
 
     # a test for when last_wanted_space is at definition[definition_part_max_length - len(" ...")]
@@ -118,8 +117,7 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(
             str(self.synset),
-            "igama : A unit that stands on its own according to the intuition of language "
-            "users. Some issues ...",
+            "igama : A unit that stands on its own according to the intuition of ...",
         )
 
     def test_str_three_words_long_definition(self):
@@ -142,8 +140,7 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(
             str(self.synset),
-            "amagama, ibizo, igama : A unit that stands on its own according to the intuition "
-            "of language ...",
+            "amagama, ibizo, igama : A unit that stands on its own according to the ...",
         )
 
     def test_str_four_words_long_definition(self):
@@ -162,7 +159,7 @@ class SynsetTestCase(TestCase):
         self.synset.refresh_from_db()
 
         self.synset.definition = (
-            "A unit that stands on its own according to the intuition of language users. "
+            "A unit that stands on its own according to ... "
             "The difficulty with this definition is that literate language users don’t "
             "normally have intuitions about wordhood that are separate from their writing system."
         )
@@ -170,8 +167,7 @@ class SynsetTestCase(TestCase):
 
         self.assertEqual(
             str(self.synset),
-            "amabizo, amagama, ibizo, ... : A unit that stands on its own according to the "
-            "intuition of ...",
+            "amabizo, amagama, ibizo, ... : A unit that stands on its own according to ...",
         )
 
     def test_synset_change_details_recorded(self):

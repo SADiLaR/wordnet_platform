@@ -1,0 +1,15 @@
+{% load i18n %}
+<div class="d-flex gap-2">
+    <input type="search"
+           name="q"
+           class="form-control form-control-sm"
+           placeholder="{% trans 'Search synsets…' %}"
+           value="{{ q }}"
+    >
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            hx-get="{% url 'editor:clear_htmx' %}"
+            hx-target="{{ cancel_target }}"
+            hx-swap="innerHTML">
+        {% trans "Cancel" %}
+    </button>
+</div>

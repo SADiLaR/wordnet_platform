@@ -3,14 +3,18 @@ from collections import defaultdict
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q, prefetch_related_objects
-from django.http import HttpResponseNotAllowed
+from django.db.models.functions import Length
+from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
+from django.views.decorators.http import require_GET, require_POST
 
-from lex.models import Relation, Synset, Wordnet
+from lex.models import Relation, RelationType, Synset, Wordnet
 
 from .filters import SynsetFilter
 from .forms import DefinitionForm
+
+QUERY_LENGTH_SPLITS = (3, 6)
 
 
 def _guess_princeton_id(id_code):
@@ -194,3 +198,116 @@ def synset_definition(request, pk):
             return render(request, "editor/synset_detail.html", context)
 
     return HttpResponseNotAllowed(["POST"])
+
+
+@require_GET
+def suggest_relation_htmx(request, pk):
+    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+
+    if r_type := request.GET.get("type"):
+        template = "editor/snippets/_add_relation.html"
+        cancel_target = f"#add-{request.GET.get('direction')}-{r_type}-container"
+    else:
+        template = "editor/snippets/_add_relation_new.html"
+        cancel_target = "#add-relation-new-container"
+
+    context = {
+        "synset": synset,
+        "type": r_type,
+        "direction": request.GET.get("direction"),
+        "types": RelationType.objects.all().order_by("name"),
+        "cancel_target": cancel_target,
+    }
+
+    if q := request.GET.get("q"):
+        # TODO review and improve search efficiency
+        if len(q) > QUERY_LENGTH_SPLITS[1]:
+            synsets = (
+                Synset.objects.filter(
+                    Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
+                    wordnet=synset.wordnet,
+                )
+                .distinct()
+                .order_by(Length("display_name"))[:6]
+            )
+        elif len(q) > QUERY_LENGTH_SPLITS[0]:
+            synsets = Synset.objects.filter(
+                sense__word__text__icontains=q,
+                wordnet=synset.wordnet,
+            ).order_by(Length("display_name"))[:6]
+        else:
+            synsets = Synset.objects.filter(
+                sense__word__text__iexact=q,
+                wordnet=synset.wordnet,
+            ).order_by(Length("display_name"))[:6]
+
+        context["synsets"] = synsets
+        context["q"] = q
+        return render(
+            request,
+            "editor/snippets/_relation_results.html",
+            context,
+        )
+    return render(
+        request,
+        template,
+        context,
+    )
+
+
+@require_POST
+def add_relation_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+
+    type_name = request.POST.get("type")
+    direction = request.POST.get("direction")
+    target_synset_pk = request.POST.get("target_pk")
+    target_synset = get_object_or_404(Synset, pk=target_synset_pk)
+
+    if direction == "outgoing":
+        synset_from = synset
+        synset_to = target_synset
+    elif direction == "incoming":
+        synset_from = target_synset
+        synset_to = synset
+    else:
+        context = _synset_context(synset=synset)
+        context["error"] = _("Invalid relation direction")
+        return render(request, "editor/snippets/_relations.html", context)
+
+    if target_synset.wordnet_id != synset.wordnet_id:
+        context = _synset_context(synset=synset)
+        context["error"] = _("Synsets belong to different wordnets")
+        return render(request, "editor/snippets/_relations.html", context)
+    if target_synset.pk == synset.pk:
+        context = _synset_context(synset=synset)
+        context["error"] = _("A synset cannot be related to itself")
+        return render(request, "editor/snippets/_relations.html", context)
+
+    rel_type = get_object_or_404(RelationType, name=type_name)
+    if Relation.objects.filter(
+        synset_from=synset_to, synset_to=synset_from, type=rel_type
+    ).exists():
+        context = _synset_context(synset=synset)
+        context["error"] = _("This relation already exists in the opposite direction")
+        return render(request, "editor/snippets/_relations.html", context)
+    elif Relation.objects.filter(
+        synset_from=synset_from, synset_to=synset_to, type=rel_type
+    ).exists():
+        context = _synset_context(synset=synset)
+        context["error"] = _("This relation already exists")
+        return render(request, "editor/snippets/_relations.html", context)
+    Relation.objects.create(synset_from=synset_from, synset_to=synset_to, type=rel_type)
+    if synset.status != Synset.Status.DRAFT:
+        synset.status = Synset.Status.DRAFT
+        synset.save(update_fields=["status"])
+    return render(
+        request,
+        "editor/snippets/_relations.html",
+        context=_synset_context(synset=synset),
+    )
+
+
+@require_GET
+def clear_htmx(request):
+    return HttpResponse("", content_type="text/html")

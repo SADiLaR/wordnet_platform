@@ -1,0 +1,9 @@
+{% load i18n %}
+<form hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}"
+      hx-trigger="input delay:300ms[target.value.length > 0]"
+      hx-target="#add-{{ direction }}-{{ type }}-results"
+      hx-swap="innerHTML">
+    <input type="hidden" name="type" value="{{ type }}">
+    <input type="hidden" name="direction" value="{{ direction }}">
+    {% include "editor/snippets/_relation_search_bar.html" %}
+</form>

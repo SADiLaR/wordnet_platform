@@ -224,35 +224,32 @@ def add_relation_form_htmx(request, pk):
 
 def search_synsets_htmx(request, pk):
     synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
-    if q := request.GET.get("q"):
-        # TODO review and improve search efficiency
-        if len(q) > QUERY_LENGTH_SPLITS[1]:
-            synsets = (
-                Synset.objects.filter(
-                    Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
-                    wordnet=synset.wordnet,
-                )
-                .distinct()
-                .order_by(Length("display_name"))[:6]
-            )
-        elif len(q) > QUERY_LENGTH_SPLITS[0]:
-            synsets = Synset.objects.filter(
-                sense__word__text__icontains=q,
-                wordnet=synset.wordnet,
-            ).order_by(Length("display_name"))[:6]
-        else:
-            synsets = Synset.objects.filter(
-                sense__word__text__iexact=q,
-                wordnet=synset.wordnet,
-            ).order_by(Length("display_name"))[:6]
+    if not (q := request.GET.get("q")):
+        return HttpResponse("", content_type="text/html")
 
-        context["synsets"] = synsets
-        context["q"] = q
-        return render(
-            request,
-            "editor/snippets/_relation_results.html",
-            context,
-        )
+    # TODO review and improve search efficiency
+    synsets = (
+        Synset.objects.filter(wordnet=synset.wordnet)
+        .order_by(Length("display_name"))
+    )
+    if len(q) > QUERY_LENGTH_SPLITS[1]:
+        synsets = synsets.filter(
+            Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
+        ).distinct()
+    elif len(q) > QUERY_LENGTH_SPLITS[0]:
+        synsets = synsets.filter(sense__word__text__icontains=q)
+    else:
+        synsets = synsets.filter(sense__word__text__iexact=q)
+
+    context = {
+        "synset": synset,
+        "synsets": synsets[:6],
+    }
+    return render(
+        request,
+        "editor/snippets/_relation_results.html",
+        context,
+    )
 
 
 @require_POST

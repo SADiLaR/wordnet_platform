@@ -202,7 +202,7 @@ def synset_definition(request, pk):
 
 @require_GET
 def add_relation_form_htmx(request, pk):
-    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+    synset = get_object_or_404(Synset, pk=pk)
 
     if r_type := request.GET.get("type"):
         template = "editor/snippets/_add_relation.html"
@@ -223,13 +223,14 @@ def add_relation_form_htmx(request, pk):
 
 
 def search_synsets_htmx(request, pk):
-    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+    synset = get_object_or_404(Synset, pk=pk)
     if not (q := request.GET.get("q")):
         return HttpResponse("", content_type="text/html")
 
     # TODO review and improve search efficiency
     synsets = (
-        Synset.objects.filter(wordnet=synset.wordnet)
+        Synset.objects.filter(wordnet_id=synset.wordnet_id)
+        .only("display_name", "definition")
         .order_by(Length("display_name"))
     )
     if len(q) > QUERY_LENGTH_SPLITS[1]:

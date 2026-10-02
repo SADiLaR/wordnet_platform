@@ -413,7 +413,7 @@ class EditorViewTest(TestCase):
 
     def test_search_synset(self):
         # Queries:
-        # fetch synset + wordnet (select_related)
+        # fetch synset
         # search query
         with self.assertNumQueries(2):
             response = self.client.get(
@@ -426,7 +426,7 @@ class EditorViewTest(TestCase):
 
     def test_suggest_relation_htmx_get_search_no_type(self):
         # Queries:
-        # fetch synset + wordnet (select_related)
+        # fetch synset
         # search query
         with self.assertNumQueries(2):
             response = self.client.get(

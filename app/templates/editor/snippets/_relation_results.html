@@ -1,4 +1,5 @@
 {% load i18n %}
+{% spaceless %}
 {% comment %}synsets is None before any search; an empty queryset means the search returned no results{% endcomment %}
 {% if synsets is not None %}
     {% if synsets %}
@@ -14,3 +15,4 @@
         <p class="text-secondary small mt-2 mb-0">{% trans "No synsets found." %}</p>
     {% endif %}
 {% endif %}
+{% endspaceless %}

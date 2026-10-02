@@ -206,17 +206,14 @@ def add_relation_form_htmx(request, pk):
 
     if r_type := request.GET.get("type"):
         template = "editor/snippets/_add_relation.html"
-        cancel_target = f"#add-{request.GET.get('direction')}-{r_type}-container"
     else:
         template = "editor/snippets/_add_relation_new.html"
-        cancel_target = "#add-relation-new-container"
 
     context = {
         "synset": synset,
         "type": r_type,
         "direction": request.GET.get("direction"),
         "types": RelationType.objects.all().order_by("name"),
-        "cancel_target": cancel_target,
     }
     return render(
         request,

@@ -5,12 +5,8 @@
     <ul class="dropdown-menu show w-100">
         {% for result in synsets %}
         <li>
-            <button type="button" class="dropdown-item"
-                    hx-post="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
-                    hx-target="#relations-section"
-                    hx-vals='{"target_pk": "{{ result.pk }}", "type": "{{ type }}", "direction": "{{ direction }}"}'>
-                {{ result }}
-            </button>
+            <input type="hidden" name="target_pk" value="{{ result.pk }}">
+            <button class="dropdown-item">{{ result }}</button>
         </li>
       {% endfor %}
     </ul>

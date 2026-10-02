@@ -257,7 +257,7 @@ def search_synsets_htmx(request, pk):
 def add_relation_htmx(request, pk):
     synset = get_object_or_404(Synset, pk=pk)
 
-    type_name = request.POST.get("type")
+    type_id = request.POST.get("type")
     direction = request.POST.get("direction")
     target_synset_pk = request.POST.get("target_pk")
     target_synset = get_object_or_404(Synset, pk=target_synset_pk)
@@ -282,7 +282,7 @@ def add_relation_htmx(request, pk):
         context["error"] = _("A synset cannot be related to itself")
         return render(request, "editor/snippets/_relations.html", context)
 
-    rel_type = get_object_or_404(RelationType, name=type_name)
+    rel_type = get_object_or_404(RelationType, id=type_id)
     if Relation.objects.filter(
         synset_from=synset_to, synset_to=synset_from, type=rel_type
     ).exists():

@@ -32,7 +32,7 @@
         <select name="type" class="form-select form-select-sm" required>
             <option value="">{% trans "— relation type —" %}</option>
             {% for t in types %}
-                <option value="{{ t.name }}" {% if type == t.name %}selected{% endif %}>{{ t.name }}</option>
+                <option value="{{ t.id }}"{% if type == t.name %} selected{% endif %}>{{ t.name }}</option>
             {% endfor %}
         </select>
     </div>

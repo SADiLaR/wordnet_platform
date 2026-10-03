@@ -201,56 +201,54 @@ def synset_definition(request, pk):
 
 
 @require_GET
-def suggest_relation_htmx(request, pk):
-    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+def add_relation_form_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
 
     if r_type := request.GET.get("type"):
         template = "editor/snippets/_add_relation.html"
-        cancel_target = f"#add-{request.GET.get('direction')}-{r_type}-container"
     else:
         template = "editor/snippets/_add_relation_new.html"
-        cancel_target = "#add-relation-new-container"
 
     context = {
         "synset": synset,
         "type": r_type,
         "direction": request.GET.get("direction"),
         "types": RelationType.objects.all().order_by("name"),
-        "cancel_target": cancel_target,
     }
-
-    if q := request.GET.get("q"):
-        # TODO review and improve search efficiency
-        if len(q) > QUERY_LENGTH_SPLITS[1]:
-            synsets = (
-                Synset.objects.filter(
-                    Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
-                    wordnet=synset.wordnet,
-                )
-                .distinct()
-                .order_by(Length("display_name"))[:6]
-            )
-        elif len(q) > QUERY_LENGTH_SPLITS[0]:
-            synsets = Synset.objects.filter(
-                sense__word__text__icontains=q,
-                wordnet=synset.wordnet,
-            ).order_by(Length("display_name"))[:6]
-        else:
-            synsets = Synset.objects.filter(
-                sense__word__text__iexact=q,
-                wordnet=synset.wordnet,
-            ).order_by(Length("display_name"))[:6]
-
-        context["synsets"] = synsets
-        context["q"] = q
-        return render(
-            request,
-            "editor/snippets/_relation_results.html",
-            context,
-        )
     return render(
         request,
         template,
+        context,
+    )
+
+
+def search_synsets_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    if not (q := request.GET.get("q")):
+        return HttpResponse("", content_type="text/html")
+
+    # TODO review and improve search efficiency
+    synsets = (
+        Synset.objects.filter(wordnet_id=synset.wordnet_id)
+        .only("display_name", "definition")
+        .order_by(Length("display_name"))
+    )
+    if len(q) > QUERY_LENGTH_SPLITS[1]:
+        synsets = synsets.filter(
+            Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
+        ).distinct()
+    elif len(q) > QUERY_LENGTH_SPLITS[0]:
+        synsets = synsets.filter(sense__word__text__icontains=q)
+    else:
+        synsets = synsets.filter(sense__word__text__iexact=q)
+
+    context = {
+        "synset": synset,
+        "synsets": synsets[:6],
+    }
+    return render(
+        request,
+        "editor/snippets/_relation_results.html",
         context,
     )
 
@@ -259,7 +257,7 @@ def suggest_relation_htmx(request, pk):
 def add_relation_htmx(request, pk):
     synset = get_object_or_404(Synset, pk=pk)
 
-    type_name = request.POST.get("type")
+    type_id = request.POST.get("type")
     direction = request.POST.get("direction")
     target_synset_pk = request.POST.get("target_pk")
     target_synset = get_object_or_404(Synset, pk=target_synset_pk)
@@ -284,7 +282,7 @@ def add_relation_htmx(request, pk):
         context["error"] = _("A synset cannot be related to itself")
         return render(request, "editor/snippets/_relations.html", context)
 
-    rel_type = get_object_or_404(RelationType, name=type_name)
+    rel_type = get_object_or_404(RelationType, id=type_id)
     if Relation.objects.filter(
         synset_from=synset_to, synset_to=synset_from, type=rel_type
     ).exists():

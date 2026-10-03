@@ -100,14 +100,6 @@ code {
   color: rgb(var(--draft-color));
 }
 
-/* ── Add relation search ── */
-/* Greys out the search box until a relation type is chosen */
-form:has(select[name="type"]:invalid) input[name="q"] {
-  pointer-events: none;
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* ── Relation tree ── */
 .relation-tree {
   line-height: 1.1;

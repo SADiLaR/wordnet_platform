@@ -3,7 +3,6 @@ from collections import defaultdict
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q, prefetch_related_objects
-from django.db.models.functions import Length
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
@@ -11,10 +10,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from lex.models import Relation, RelationType, Synset, Wordnet
 
-from .filters import SynsetFilter
+from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm
-
-QUERY_LENGTH_SPLITS = (3, 6)
 
 
 def _guess_princeton_id(id_code):
@@ -229,16 +226,8 @@ def search_synsets_htmx(request, pk):
     synset = get_object_or_404(Synset, pk=pk)
     synsets = Synset.objects.filter(wordnet_id=synset.wordnet_id).only(
         "display_name", "definition"
-    ).order_by(Length("display_name"))
-    if len(q) > QUERY_LENGTH_SPLITS[1]:
-        synsets = synsets.filter(
-            Q(definition__icontains=q) | Q(sense__word__text__icontains=q),
-        ).distinct()
-    elif len(q) > QUERY_LENGTH_SPLITS[0]:
-        synsets = synsets.filter(sense__word__text__icontains=q)
-    else:
-        synsets = synsets.filter(sense__word__text__iexact=q)
-
+    )
+    synsets = make_search_qs(synsets, q)
     context = {
         "synset": synset,
         "synsets": synsets[:6],

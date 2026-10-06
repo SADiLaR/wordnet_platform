@@ -7,6 +7,42 @@ from django_filters import ModelMultipleChoiceFilter, MultipleChoiceFilter
 
 from lex.models import PartOfSpeech, Sense, Synset, Wordnet
 
+MIN_DEFINITION_SEARCH_LENGTH = 4
+
+
+def make_search_qs(queryset, search):
+    search_filter = Q(display_name__unaccent__icontains=search)
+    # Only search definitions for longer search terms.
+    if len(search) >= MIN_DEFINITION_SEARCH_LENGTH:
+        search_filter |= Q(definition__unaccent__icontains=search)
+
+    # Find Sense rows that belong to the current Synset and whose linked
+    # Word matches the search text, so we can rank using the actual
+    # matching word rather than the full display_name.
+    matching_senses = (
+        Sense.objects.filter(
+            synset_id=OuterRef("pk"),
+            word__text__unaccent__icontains=search,
+        )
+        .annotate(
+            word_score=Length("word__text"),
+        )
+        .order_by(
+            "word_score",
+        )
+    )
+    return (
+        queryset.filter(search_filter)
+        .annotate(
+            match_score=Subquery(matching_senses.values("word_score")[:1]),
+        )
+        .order_by(
+            "match_score",
+            "display_name",
+            "pk",
+        )
+    )
+
 
 class SynsetFilter(django_filters.FilterSet):
     search = django_filters.CharFilter(method="ignore", label=_("Search"))
@@ -39,42 +75,9 @@ class SynsetFilter(django_filters.FilterSet):
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         search = self.form.cleaned_data.get("search", "").strip()
-        MIN_DEFINITION_SEARCH_LENGTH = 4
 
         if search:
-            search_filter = Q(display_name__unaccent__icontains=search)
-            # Only search definitions for longer search terms.
-            if len(search) >= MIN_DEFINITION_SEARCH_LENGTH:
-                search_filter |= Q(definition__unaccent__icontains=search)
-
-            # Find Sense rows that belong to the current Synset and whose linked
-            # Word matches the search text, so we can rank using the actual
-            # matching word rather than the full display_name.
-            matching_senses = (
-                Sense.objects.filter(
-                    synset_id=OuterRef("pk"),
-                    word__text__unaccent__icontains=search,
-                )
-                .annotate(
-                    word_score=Length("word__text"),
-                )
-                .order_by(
-                    "word_score",
-                )
-            )
-
-            queryset = (
-                queryset.filter(search_filter)
-                .annotate(
-                    match_score=Subquery(matching_senses.values("word_score")[:1]),
-                )
-                .order_by(
-                    "match_score",
-                    "display_name",
-                    "pk",
-                )
-            )
-
+            return make_search_qs(queryset, search)
         return queryset
 
     def ignore(self, queryset, name, value):

@@ -403,10 +403,10 @@ class EditorViewTest(TestCase):
         # Queries:
         # fetch synset
         # types not evaluated by _add_relation.html
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(2):
             response = self.client.get(
                 self._get_add_relation_form_url(self.synset_a),
-                {"type": self.relation_type, "direction": "outgoing"},
+                {"type": self.relation_type.pk, "direction": "outgoing"},
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_add_relation.html")

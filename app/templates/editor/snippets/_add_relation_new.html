@@ -1,9 +1,8 @@
 {% load i18n %}
 <form class="mt-2"
-      hx-get="{% url 'editor:suggest_relation_htmx' pk=synset.pk %}"
-      hx-trigger="input delay:300ms[target.value.length > 0]"
-      hx-target="#add-relation-new-results"
-      hx-swap="innerHTML">
+      hx-post="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
+      hx-target="#relations-section"
+>
     <div class="d-flex gap-2 mb-2">
         <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Direction' %}">
             <input type="radio"
@@ -33,7 +32,7 @@
         <select name="type" class="form-select form-select-sm" required>
             <option value="">{% trans "— relation type —" %}</option>
             {% for t in types %}
-                <option value="{{ t.name }}" {% if type == t.name %}selected{% endif %}>{{ t.name }}</option>
+                <option value="{{ t.id }}"{% if type == t.name %} selected{% endif %}>{{ t.name }}</option>
             {% endfor %}
         </select>
     </div>

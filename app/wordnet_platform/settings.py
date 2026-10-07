@@ -63,6 +63,9 @@ if DEBUG:
         INSTALLED_APPS += [
             "debug_toolbar",
         ]
+        DEBUG_TOOLBAR_CONFIG = {
+            "UPDATE_ON_FETCH": True,
+        }
 
 SIMPLE_HISTORY_REVERT_DISABLED = True
 

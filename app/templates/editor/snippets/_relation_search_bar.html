@@ -4,12 +4,17 @@
            name="q"
            class="form-control form-control-sm"
            placeholder="{% trans 'Search synsets…' %}"
-           value="{{ q }}"
+           autocomplete="off"
+           autofocus
+           hx-get="{% url 'editor:search_synsets_htmx' pk=synset.pk %}"
+           hx-trigger="input delay:300ms"
+           hx-target="next .results"
     >
     <button type="button" class="btn btn-sm btn-outline-secondary"
             hx-get="{% url 'editor:clear_htmx' %}"
-            hx-target="{{ cancel_target }}"
-            hx-swap="innerHTML">
+            hx-target="closest .relation-form"
+    >
         {% trans "Cancel" %}
     </button>
 </div>
+<div class="results"></div>

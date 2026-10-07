@@ -84,17 +84,17 @@ class EditorViewTest(TestCase):
             text="Hierdie is 'n toets.", sense=self.sense_1
         )
 
-        relation_type = RelationType.objects.create(name="hyper")
+        self.relation_type = RelationType.objects.create(name="hyper")
         Relation.objects.create(
             synset_from=self.synset_e,
             synset_to=self.synset_f,
-            type=relation_type,
+            type=self.relation_type,
         )
 
         Relation.objects.create(
             synset_from=self.synset_c,
             synset_to=self.synset_b,
-            type=relation_type,
+            type=self.relation_type,
         )
 
     def _get_browse_url(self):
@@ -126,8 +126,11 @@ class EditorViewTest(TestCase):
     def _get_synset_definition_url_nonexist(self):
         return reverse("editor:synset_definition", kwargs={"pk": 99999})
 
-    def _get_suggest_relation_url(self, synset_obj):
-        return reverse("editor:suggest_relation_htmx", kwargs={"pk": synset_obj.pk})
+    def _get_add_relation_form_url(self, synset_obj):
+        return reverse("editor:add_relation_form_htmx", kwargs={"pk": synset_obj.pk})
+
+    def _get_search_synset_url(self, synset_obj):
+        return reverse("editor:search_synsets_htmx", kwargs={"pk": synset_obj.pk})
 
     def _get_add_relation_url(self, synset_obj):
         return reverse("editor:add_relation_htmx", kwargs={"pk": synset_obj.pk})
@@ -391,7 +394,7 @@ class EditorViewTest(TestCase):
         # fetch synset
         # fetch types (evaluated by _add_relation_new.html)
         with self.assertNumQueries(2):
-            response = self.client.get(self._get_suggest_relation_url(self.synset_a))
+            response = self.client.get(self._get_add_relation_form_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_add_relation_new.html")
         self.assertIn("types", response.context)
@@ -402,20 +405,20 @@ class EditorViewTest(TestCase):
         # types not evaluated by _add_relation.html
         with self.assertNumQueries(1):
             response = self.client.get(
-                self._get_suggest_relation_url(self.synset_a),
-                {"type": "hyper", "direction": "outgoing"},
+                self._get_add_relation_form_url(self.synset_a),
+                {"type": self.relation_type, "direction": "outgoing"},
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_add_relation.html")
 
-    def test_suggest_relation_htmx_get_with_search(self):
+    def test_search_synset(self):
         # Queries:
-        # fetch synset + wordnet (select_related)
+        # fetch synset
         # search query
         with self.assertNumQueries(2):
             response = self.client.get(
-                self._get_suggest_relation_url(self.synset_a),
-                {"type": "hyper", "direction": "outgoing", "q": "toets"},
+                self._get_search_synset_url(self.synset_a),
+                {"type": self.relation_type.pk, "direction": "outgoing", "q": "toets"},
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_relation_results.html")
@@ -423,11 +426,11 @@ class EditorViewTest(TestCase):
 
     def test_suggest_relation_htmx_get_search_no_type(self):
         # Queries:
-        # fetch synset + wordnet (select_related)
+        # fetch synset
         # search query
         with self.assertNumQueries(2):
             response = self.client.get(
-                self._get_suggest_relation_url(self.synset_a),
+                self._get_search_synset_url(self.synset_a),
                 {"q": "toets"},
             )
         self.assertEqual(response.status_code, 200)
@@ -450,7 +453,7 @@ class EditorViewTest(TestCase):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
-                    "type": "hyper",
+                    "type": self.relation_type.pk,
                     "direction": "outgoing",
                     "target_pk": self.synset_b.pk,
                 },
@@ -478,7 +481,7 @@ class EditorViewTest(TestCase):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
-                    "type": "hyper",
+                    "type": self.relation_type.pk,
                     "direction": "incoming",
                     "target_pk": self.synset_b.pk,
                 },
@@ -499,7 +502,7 @@ class EditorViewTest(TestCase):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
-                    "type": "hyper",
+                    "type": self.relation_type.id,
                     "direction": "sideways",
                     "target_pk": self.synset_b.pk,
                 },
@@ -516,7 +519,7 @@ class EditorViewTest(TestCase):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
-                    "type": "hyper",
+                    "type": self.relation_type.pk,
                     "direction": "outgoing",
                     "target_pk": self.synset_d.pk,
                 },
@@ -533,7 +536,7 @@ class EditorViewTest(TestCase):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
-                    "type": "hyper",
+                    "type": self.relation_type.pk,
                     "direction": "outgoing",
                     "target_pk": self.synset_a.pk,
                 },
@@ -554,7 +557,7 @@ class EditorViewTest(TestCase):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_b),
                 {
-                    "type": "hyper",
+                    "type": self.relation_type.pk,
                     "direction": "outgoing",
                     "target_pk": self.synset_c.pk,
                 },

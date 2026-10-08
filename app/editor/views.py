@@ -14,6 +14,10 @@ from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm
 
 
+def about(request):
+    return render(request, "editor/about.html")
+
+
 def _guess_princeton_id(id_code):
     if id_code and id_code.startswith("ENG20-"):
         return id_code[6:]

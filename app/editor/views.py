@@ -36,6 +36,14 @@ def _guess_source_synset(synset):
     return source_synset
 
 
+def _save_updated_synset(synset, updated_fields=None):
+    updated_fields = [] if not updated_fields else updated_fields
+    if synset.status != Synset.Status.DRAFT:
+        synset.status = Synset.Status.DRAFT
+        updated_fields.append("status")
+    synset.save(update_fields=updated_fields)
+
+
 def assignment_queue(request, wn_pk=None):
     wordnets = Wordnet.objects.all()
     context = {"wordnets": wordnets}
@@ -189,10 +197,7 @@ def synset_definition(request, pk):
         if form.is_valid():
             synset.definition = form.cleaned_data["definition"]
             updated_fields = ["definition"]
-            if synset.status != Synset.Status.DRAFT:
-                synset.status = Synset.Status.DRAFT
-                updated_fields.append("status")
-            synset.save(update_fields=updated_fields)
+            _save_updated_synset(synset, updated_fields)
 
             return redirect("editor:synset_detail", pk=pk)
         else:
@@ -292,6 +297,25 @@ def add_relation_htmx(request, pk):
     if synset.status != Synset.Status.DRAFT:
         synset.status = Synset.Status.DRAFT
         synset.save(update_fields=["status"])
+    return render(
+        request,
+        "editor/snippets/_relations.html",
+        context=_synset_context(synset=synset),
+    )
+
+
+@require_POST
+def delete_relation_htmx(request, synset_pk, rel_pk):
+    synset = get_object_or_404(Synset, pk=synset_pk)
+    relation = get_object_or_404(Relation, pk=rel_pk)
+    if not (relation.synset_from_id == synset_pk or relation.synset_to_id == synset_pk):
+        context = _synset_context(synset=synset)
+        context["error"] = _(
+            "Attempted to delete a relation not belonging to this synset."
+        )
+        return render(request, "editor/snippets/_relations.html", context)
+    relation.delete()
+    _save_updated_synset(synset)
     return render(
         request,
         "editor/snippets/_relations.html",

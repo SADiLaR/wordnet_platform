@@ -1,0 +1,5 @@
+{% load i18n %}
+{% trans "Delete this relation?" as confirm_message %}
+{% trans "Delete" as confirm_label %}
+{% url 'editor:delete_relation_htmx' synset_pk=synset.pk rel_pk=relation.pk as delete_url %}
+{% include "editor/snippets/_confirm_action.html" with confirm_message=confirm_message post_url=delete_url hx_target="#relations-section" confirm_label=confirm_label cancel_prefix="del-" cancel_pk=relation.pk %}

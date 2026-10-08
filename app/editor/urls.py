@@ -41,6 +41,11 @@ urlpatterns = [
         name="search_synsets_htmx",
     ),
     path(
+        "synsets/<int:synset_pk>/relations/delete/<int:rel_pk>/",
+        views.delete_relation_htmx,
+        name="delete_relation_htmx",
+    ),
+    path(
         "clear/",
         views.clear_htmx,
         name="clear_htmx",

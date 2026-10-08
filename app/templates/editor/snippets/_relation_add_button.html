@@ -1,0 +1,8 @@
+{% load i18n %}
+<pre class="relation-tree"><span
+    class="connector"
+    aria-hidden="true">{{ connector }}</span><button type="button"
+    class="btn btn-sm btn-add py-0"
+    aria-label="{% trans 'Add' %}"
+    hx-get="{% url 'editor:add_relation_form_htmx' pk=synset.pk %}?type={{ reltype_id }}&direction={{ direction }}"
+    hx-target="next .relation-form">+</button></pre>

@@ -10,37 +10,46 @@ and the following for incoming relations:
 ⊙ ◀─┬── d : ...
     ├── e : ...
     └── +
+
+Each relation row is its own <pre> so that .relation-form divs can sit
+between rows without being inside the <pre> element.
 {% endcomment %}
 
 <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</h3>
 {% if error %}<div class="alert alert-danger py-1 px-2 small mt-1" role="alert">{{ error }}</div>{% endif %}
 {% if relations.outgoing %}
   <h4 class="text-body-secondary small fw-semibold mt-2 mb-1">{% trans "Outgoing" %}</h4>
+  {% comment %}&#xFE0E; is the Unicode text presentation selector — it forces ▶/◀ to render as plain text glyphs rather than coloured emoji{% endcomment %}
   {% for reltype_id, rel_info in relations.outgoing.items %}
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
-    {% comment %}&#xFE0E; is the Unicode text presentation selector — it forces ▶/◀ to render as plain text glyphs rather than coloured emoji{% endcomment %}
-    <pre class="relation-tree mb-2">{% for rel in rel_info.relations %}{% if forloop.first %}<span class="connector" aria-hidden="true">⊙ ─┬──▶&#xFE0E; </span>{% else %}
-<span class="connector" aria-hidden="true">   ├──▶&#xFE0E; </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_to.pk %}">{{ rel.synset_to }}</a>{% endfor %}
-<span class="connector" aria-hidden="true">   └──▶&#xFE0E; </span><button type="button"
-        class="btn btn-sm btn-add py-0"
-        aria-label="{% trans 'Add' %}"
-        hx-get="{% url 'editor:add_relation_form_htmx' pk=synset.pk %}?type={{ reltype_id }}&direction=outgoing"
-        hx-target="next .relation-form">+</button></pre>
-    <div class="relation-form"></div>
+    <div class="mb-2">
+      {% for rel in rel_info.relations %}
+        {% if forloop.first %}
+           {% include "editor/snippets/_relation_branch.html" with connector="⊙ ─┬──▶&#xFE0E; " tgt_synset=rel.synset_to %}
+        {% else %}
+           {% include "editor/snippets/_relation_branch.html" with connector="   ├──▶&#xFE0E; " tgt_synset=rel.synset_to %}
+        {% endif %}
+      {% endfor %}
+      {% include "editor/snippets/_relation_add_button.html" with connector="   └──▶&#xFE0E; " direction="outgoing" %}
+      <div class="relation-form"></div>
+    </div>
   {% endfor %}
 {% endif %}
 {% if relations.incoming %}
   <h4 class="text-body-secondary small fw-semibold mt-3 mb-1">{% trans "Incoming" %}</h4>
   {% for reltype_id, rel_info in relations.incoming.items %}
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
-    <pre class="relation-tree mb-2">{% for rel in rel_info.relations %}{% if forloop.first %}<span class="connector" aria-hidden="true">⊙ ◀&#xFE0E;─┬── </span>{% else %}
-<span class="connector" aria-hidden="true">    ├── </span>{% endif %}<a href="{% url 'editor:synset_detail' pk=rel.synset_from.pk %}">{{ rel.synset_from }}</a>{% endfor %}
-<span class="connector" aria-hidden="true">    └── </span><button type="button"
-        class="btn btn-sm btn-add py-0"
-        aria-label="{% trans 'Add' %}"
-        hx-get="{% url 'editor:add_relation_form_htmx' pk=synset.pk %}?type={{ reltype_id }}&direction=incoming"
-        hx-target="next .relation-form">+</button></pre>
-    <div class="relation-form"></div>
+    <div class="mb-2">
+      {% for rel in rel_info.relations %}
+        {% if forloop.first %}
+          {% include "editor/snippets/_relation_branch.html" with connector="⊙ ◀&#xFE0E;─┬── " tgt_synset=rel.synset_from %}
+        {% else %}
+          {% include "editor/snippets/_relation_branch.html" with connector="    ├── " tgt_synset=rel.synset_from %}
+        {% endif %}
+      {% endfor %}
+      {% include "editor/snippets/_relation_add_button.html" with connector="    └── " direction="incoming" %}
+      <div class="relation-form"></div>
+    </div>
   {% endfor %}
 {% endif %}
 <button type="button"

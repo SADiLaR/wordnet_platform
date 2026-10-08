@@ -3,7 +3,7 @@
       hx-post="{% url 'editor:add_relation_htmx' pk=synset.pk %}"
       hx-target="#relations-section"
 >
-    <input type="hidden" name="type" value="{{ type }}">
+    <input type="hidden" name="type" value="{{ type_id }}">
     <input type="hidden" name="direction" value="{{ direction }}">
     {% include "editor/snippets/_relation_search_bar.html" %}
 </form>

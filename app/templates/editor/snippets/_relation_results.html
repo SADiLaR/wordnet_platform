@@ -4,8 +4,7 @@
     <ul class="dropdown-menu show w-100">
         {% for result in synsets %}
         <li>
-            <input type="hidden" name="target_pk" value="{{ result.pk }}">
-            <button class="dropdown-item">{{ result }}</button>
+            <button class="dropdown-item" name="target_pk" value="{{ result.pk }}">{{ result }}</button>
         </li>
         {% endfor %}
     </ul>

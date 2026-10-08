@@ -93,10 +93,14 @@ def _synset_context(pk=None, synset=None):
     relations = {"outgoing": defaultdict(list), "incoming": defaultdict(list)}
 
     for rel in all_relations:
+        type_pk = rel.type_id
         if synset == rel.synset_from:
-            relations["outgoing"][rel.type.name].append(rel)
+            direction = "outgoing"
         else:
-            relations["incoming"][rel.type.name].append(rel)
+            direction = "incoming"
+        if type_pk not in relations[direction]:
+            relations[direction][type_pk] = {"relations": [], "name": rel.type.name}
+        relations[direction][type_pk]["relations"].append(rel)
 
     if synset.copied_from_id:
         source_synset = synset.copied_from
@@ -111,7 +115,9 @@ def _synset_context(pk=None, synset=None):
     context = {
         "synset": synset,
         "senses": senses,
-        "relations": {direction: dict(types) for direction, types in relations.items()},
+        "relations": {
+            direction: dict(groups) for direction, groups in relations.items()
+        },
         "source_synset": source_synset,
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
     }
@@ -203,12 +209,13 @@ def add_relation_form_htmx(request, pk):
 
     if r_type := request.GET.get("type"):
         template = "editor/snippets/_add_relation.html"
+        rel_type = get_object_or_404(RelationType, pk=r_type)
     else:
         template = "editor/snippets/_add_relation_new.html"
 
     context = {
         "synset": synset,
-        "type": r_type,
+        "type_id": rel_type.id if r_type else None,
         "direction": request.GET.get("direction"),
         "types": RelationType.objects.all().order_by("name"),
     }

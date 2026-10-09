@@ -24,14 +24,20 @@ between rows without being inside the <pre> element.
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
     <div class="mb-2">
       {% for rel in rel_info.relations %}
-        {% if forloop.first %}
+        {% if forloop.first and forloop.last and readonly %}
+           {% include "editor/snippets/_relation_branch.html" with connector="⊙ ────▶&#xFE0E; " tgt_synset=rel.synset_to %}
+        {% elif forloop.first %}
            {% include "editor/snippets/_relation_branch.html" with connector="⊙ ─┬──▶&#xFE0E; " tgt_synset=rel.synset_to %}
+        {% elif forloop.last and readonly %}
+           {% include "editor/snippets/_relation_branch.html" with connector="   └──▶&#xFE0E; " tgt_synset=rel.synset_to %}
         {% else %}
            {% include "editor/snippets/_relation_branch.html" with connector="   ├──▶&#xFE0E; " tgt_synset=rel.synset_to %}
         {% endif %}
       {% endfor %}
-      {% include "editor/snippets/_relation_add_button.html" with connector="   └──▶&#xFE0E; " direction="outgoing" %}
-      <div class="relation-form"></div>
+      {% if not readonly %}
+        {% include "editor/snippets/_relation_add_button.html" with connector="   └──▶&#xFE0E; " direction="outgoing" %}
+        <div class="relation-form"></div>
+      {% endif %}
     </div>
   {% endfor %}
 {% endif %}
@@ -41,17 +47,24 @@ between rows without being inside the <pre> element.
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
     <div class="mb-2">
       {% for rel in rel_info.relations %}
-        {% if forloop.first %}
+        {% if forloop.first and forloop.last and readonly %}
+          {% include "editor/snippets/_relation_branch.html" with connector="⊙ ◀&#xFE0E;──── " tgt_synset=rel.synset_from %}
+        {% elif forloop.first %}
           {% include "editor/snippets/_relation_branch.html" with connector="⊙ ◀&#xFE0E;─┬── " tgt_synset=rel.synset_from %}
+        {% elif forloop.last and readonly %}
+          {% include "editor/snippets/_relation_branch.html" with connector="    └── " tgt_synset=rel.synset_from %}
         {% else %}
           {% include "editor/snippets/_relation_branch.html" with connector="    ├── " tgt_synset=rel.synset_from %}
         {% endif %}
       {% endfor %}
-      {% include "editor/snippets/_relation_add_button.html" with connector="    └── " direction="incoming" %}
-      <div class="relation-form"></div>
+      {% if not readonly %}
+        {% include "editor/snippets/_relation_add_button.html" with connector="    └── " direction="incoming" %}
+        <div class="relation-form"></div>
+      {% endif %}
     </div>
   {% endfor %}
 {% endif %}
+{% if not readonly %}
 <button type="button"
         class="btn btn-sm btn-add mt-2"
         aria-label="{% trans 'Add relation' %}"
@@ -59,3 +72,4 @@ between rows without being inside the <pre> element.
         hx-target="next .relation-form"
 >+ {% trans "Add relation" %}</button>
 <div class="relation-form"></div>
+{% endif %}

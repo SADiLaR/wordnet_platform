@@ -277,6 +277,14 @@ class EditorViewTest(TestCase):
         self.assertEqual(qs.count(), 1)
         self.assertEqual(qs.first(), self.synset_c)
 
+    def test_search_synset_by_pk(self):
+        data = {"search": self.synset_a.pk}
+        synset_filter = SynsetFilter(data=data)
+        qs = synset_filter.qs
+        self.assertEqual(qs.count(), 1)
+        self.assertIn(self.synset_a, qs)
+        self.assertNotIn(self.synset_b, qs)
+
     def test_search_filter_order(self):
         data = {"search": "toets"}
         self.sense_3 = Sense.objects.create(word=self.word_1, synset=self.synset_a)

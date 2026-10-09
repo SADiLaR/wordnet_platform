@@ -20,10 +20,22 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from lex.concerns import concerns_detail, concerns_report
+
 from . import views
 from .forms import AuthenticationForm
 
 urlpatterns = [
+    path(
+        "admin/concerns/",
+        admin.site.admin_view(concerns_report),
+        name="concerns_report",
+    ),
+    path(
+        "admin/concerns/<str:model_name>/<str:concern_key>/",
+        admin.site.admin_view(concerns_detail),
+        name="concerns_detail",
+    ),
     path("admin/", admin.site.urls),
     path(
         "login/",

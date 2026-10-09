@@ -20,7 +20,7 @@
 <div class="row g-3">
 
   <div class="col-md-6">
-    <div class="card">
+    <div class="card mb-4">
       {% if source_synset %}
       <div class="card-header d-flex justify-content-between align-items-center">
         <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
@@ -54,8 +54,26 @@
       </div>
       {% endif %}
     </div>
+    {# QA Warnings #}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="h6 mb-0">{% trans "QA Warnings" %}</h2>
+        </div>
+        <div class="card-body">
+            {% if concerns %}
+                <ul class="mb-0">
+                    {% for concern in concerns %}
+                        <li class="mb-2"> ⚠ {{ concern.name }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-body-secondary mb-0">
+                    {% trans "No QA concerns found." %}
+                </p>
+            {% endif %}
+        </div>
+    </div>
   </div>
-
   <div class="col-md-6">
     <div class="card">
       <div class="card-header"><h2 class="h6 mb-0">{{ synset.wordnet }} {% trans "synset" %}</h2></div> {# TODO: improve for translation #}

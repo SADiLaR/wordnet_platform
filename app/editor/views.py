@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from lex.models import Relation, RelationType, Synset, Wordnet
+from lex.models import Relation, RelationType, Synset, Word, Wordnet
 
 from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm
@@ -99,6 +99,22 @@ def _synset_context(pk=None, synset=None):
     if not pk:
         pk = synset.pk
 
+    concerns = []
+
+    for concern in Synset.objects.concerns():
+        if concern["qs"].filter(pk=pk).exists():
+            concerns.append(concern)
+
+    for concern in Word.objects.concerns():
+        if (
+            concern["qs"]
+            .filter(
+                sense__synset=synset,
+            )
+            .exists()
+        ):
+            concerns.append(concern)
+
     senses = synset.sense_set.select_related("word").prefetch_related(
         "senseexample_set"
     )
@@ -136,6 +152,7 @@ def _synset_context(pk=None, synset=None):
         },
         "source_synset": source_synset,
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
+        "concerns": concerns,
     }
     return context
 

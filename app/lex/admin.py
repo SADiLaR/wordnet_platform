@@ -286,3 +286,35 @@ admin.site.register(Word, WordAdmin)
 admin.site.register(PartOfSpeech, PartOfSpeechAdmin)
 admin.site.register(RelationType, RelationTypeAdmin)
 admin.site.register(Relation, RelationAdmin)
+
+
+# Add concerns to the Django admin app list.
+def get_augmented_app_list(request, app_label=None):
+    app_list = admin.sites.AdminSite.get_app_list(
+        admin.site,
+        request,
+        app_label=app_label,
+    )
+
+    for app in app_list:
+        if app["app_label"] == "lex":
+            app["models"].append(
+                {
+                    "name": _("Concerns"),
+                    "object_name": "Concerns",
+                    "perms": {
+                        "add": False,
+                        "change": False,
+                        "delete": False,
+                        "view": True,
+                    },
+                    "admin_url": reverse("concerns_report"),
+                    "add_url": None,
+                    "view_only": True,
+                }
+            )
+
+    return app_list
+
+
+admin.site.get_app_list = get_augmented_app_list

@@ -330,13 +330,13 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_synset_detail_existing_no_princeton(self):
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(11):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["synset"], self.synset_a)
 
     def test_synset_detail_existing_with_princeton(self):
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(12):
             response = self.client.get(self._get_synset_detail_url(self.synset_f))
         self.assertEqual(response.status_code, 200)
 
@@ -371,13 +371,13 @@ class EditorViewTest(TestCase):
         self.assertEqual(not_itself, None)
 
     def test_guess_source_synset_view_existing(self):
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(13):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_f))
             self.assertEqual(response.context["source_synset"], self.synset_d)
 
     def test_copied_source_synset(self):
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(12):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
@@ -535,7 +535,7 @@ class EditorViewTest(TestCase):
         # status save
         # history (synset)
         # relations (_synset_context, synset reused from memory)
-        with self.assertNumQueries(10):
+        with self.assertNumQueries(18):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -563,7 +563,7 @@ class EditorViewTest(TestCase):
         # status save
         # history (synset)
         # relations (_synset_context, synset reused from memory)
-        with self.assertNumQueries(10):
+        with self.assertNumQueries(18):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -584,7 +584,7 @@ class EditorViewTest(TestCase):
         # fetch synset_a
         # fetch synset_b (target)
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(11):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -601,7 +601,7 @@ class EditorViewTest(TestCase):
         # fetch synset_a
         # fetch synset_d (target)
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(11):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -618,7 +618,7 @@ class EditorViewTest(TestCase):
         # fetch synset_a
         # fetch synset_a (target, same pk)
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(11):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -639,7 +639,7 @@ class EditorViewTest(TestCase):
         # circular exists() → True
         # relations (_synset_context, synset reused)
         # source synset lookup (_synset_context)
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(14):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_b),
                 {

@@ -160,6 +160,20 @@ code {
 
 .relation-tree a {
   font-family: var(--bs-body-font-family);
+  display: inline-block;
+  max-width: calc(100% - 11em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Search results ── */
+.results .dropdown-menu {
+  max-width: 100%;
+}
+
+.results .dropdown-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Inline editable forms ── */

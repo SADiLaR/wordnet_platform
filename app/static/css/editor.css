@@ -122,9 +122,6 @@ code {
   transition: opacity 0.15s;
 }
 
-.btn-delete:hover {
-  background-color: rgba(var(--bs-danger-rgb), 0.1);
-}
 
 .relation-tree:hover .btn-delete,
 .btn-delete:focus,
@@ -132,9 +129,7 @@ code {
   opacity: 1;
 }
 
-.btn-delete[aria-expanded="true"] {
-  background-color: rgba(var(--bs-danger-rgb), 0.15);
-}
+
 
 .btn-add {
   color: rgb(var(--draft-color));
@@ -142,9 +137,9 @@ code {
 }
 
 .btn-add:hover {
-  background-color: rgba(var(--draft-color), 0.1);
+  background-color: rgb(var(--draft-color));
   border-color: rgb(var(--draft-color));
-  color: rgb(var(--draft-color));
+  color: var(--primary-fg);
 }
 
 /* ── Relation tree ── */

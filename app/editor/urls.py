@@ -5,6 +5,7 @@ from . import views
 app_name = "editor"
 
 urlpatterns = [
+    path("", views.front_page, name="front_page"),
     path("about/", views.about, name="about"),
     path("queue/", views.assignment_queue, name="assignment_queue"),
     path(

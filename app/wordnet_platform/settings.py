@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.postgres",
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
+    "django.forms",
     "contributions",
     "lex",
     "editor",
@@ -184,6 +185,9 @@ if DEBUG and _email_backend_console:
 ADMINS = [
     tuple(admin.strip().rsplit(maxsplit=1)) for admin in env.list("ADMINS", default=[])
 ]
+
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

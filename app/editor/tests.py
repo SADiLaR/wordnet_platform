@@ -19,6 +19,15 @@ from lex.models import (
 )
 
 
+class FrontPageTest(SimpleTestCase):
+    def test_front_page(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/front_page.html")
+        self.assertContains(response, f'href="{reverse("editor:browse_synsets")}"')
+
+
 class AboutPageTest(SimpleTestCase):
     def test_about_page(self):
         response = self.client.get(reverse("editor:about"))
@@ -43,6 +52,57 @@ class AboutPageTest(SimpleTestCase):
 
     def test_about_url(self):
         self.assertEqual(reverse("editor:about"), "/about/")
+
+
+class FooterTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="password")
+
+    def test_authentication_urls(self):
+        self.assertEqual(reverse("login"), "/login/")
+        self.assertEqual(reverse("logout"), "/logout/")
+
+    def test_footer_for_logged_out_user(self):
+        response = self.client.get(reverse("editor:front_page"))
+
+        self.assertContains(response, f'href="{reverse("editor:about")}"')
+        self.assertContains(response, f'href="{reverse("login")}"')
+        self.assertNotContains(response, f'href="{reverse("admin:index")}"')
+        self.assertNotContains(response, f'action="{reverse("logout")}"')
+
+    def test_footer_for_logged_in_user(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("editor:front_page"))
+
+        self.assertContains(response, f'href="{reverse("editor:about")}"')
+        self.assertContains(response, f'href="{reverse("admin:index")}"')
+        self.assertContains(response, f'action="{reverse("logout")}"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        self.assertContains(response, '<button type="submit"')
+        self.assertNotContains(response, f'<a href="{reverse("logout")}"')
+        self.assertNotContains(response, f'href="{reverse("login")}"')
+
+    def test_logout_does_not_accept_get(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("logout"))
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_logout_accepts_post(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(reverse("logout"))
+
+        self.assertRedirects(response, reverse("editor:front_page"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_login_page(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "registration/login.html")
 
 
 class EditorViewTest(TestCase):

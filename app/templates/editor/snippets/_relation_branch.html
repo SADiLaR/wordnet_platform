@@ -2,7 +2,8 @@
 <pre class="relation-tree"><span
     class="connector"
     aria-hidden="true">{{ connector }}</span><a
-    href="{% url 'editor:synset_detail' pk=tgt_synset.pk %}">{{ tgt_synset }}</a><button type="button"
+    href="{% url 'editor:synset_detail' pk=tgt_synset.pk %}"
+    title="{{ tgt_synset }}">{{ tgt_synset }}</a><button type="button"
     class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"
     aria-label="{% trans 'Delete relation' %}"
     data-bs-toggle="collapse"

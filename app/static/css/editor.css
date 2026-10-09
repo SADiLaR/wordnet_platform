@@ -124,12 +124,23 @@ code {
 
 .btn-delete:hover {
   background-color: rgba(var(--bs-danger-rgb), 0.1);
+  color: var(--sdlr-red);
 }
 
 .relation-tree:hover .btn-delete,
 .btn-delete:focus,
 .btn-delete[aria-expanded="true"] {
   opacity: 1;
+}
+
+/* TODO : This only partly solves the display
+   problems on narrow screens. Most synset
+   representation strings will overflow,
+   hiding the delete button. */
+@media (hover: none) {
+  .btn-delete {
+    opacity: 1;
+  }
 }
 
 .btn-delete[aria-expanded="true"] {

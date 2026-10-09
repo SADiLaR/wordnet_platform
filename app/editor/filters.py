@@ -12,6 +12,9 @@ MIN_DEFINITION_SEARCH_LENGTH = 4
 
 def make_search_qs(queryset, search):
     search_filter = Q(display_name__unaccent__icontains=search)
+    if search.isdigit():
+        search_filter |= Q(pk=int(search))
+
     # Only search definitions for longer search terms.
     if len(search) >= MIN_DEFINITION_SEARCH_LENGTH:
         search_filter |= Q(definition__unaccent__icontains=search)

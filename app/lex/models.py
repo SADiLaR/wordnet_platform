@@ -100,16 +100,17 @@ class Synset(models.Model):
 
     def __str__(self):
         word_part = self.short_display_name()
+        definition = self.definition_display()
         definition_part_max_length = SYNSET_STR_MAX_LENGTH - len(word_part) - len(" : ")
-        if len(self.definition) <= definition_part_max_length:
+        if len(definition) <= definition_part_max_length:
             # we can use the whole definition
-            return f"{word_part} : {self.definition}"
+            return f"{word_part} : {definition}"
         else:
             # replace excessive tokens with '...'
-            last_wanted_space = self.definition.rfind(
+            last_wanted_space = definition.rfind(
                 " ", 0, definition_part_max_length - len(" ...")
             )
-            return f"{word_part} : {self.definition[:last_wanted_space]} ..."
+            return f"{word_part} : {definition[:last_wanted_space]} ..."
 
     def update_display_name(self):
         """We use display_name to avoid making DB calls in __str__().
@@ -125,6 +126,9 @@ class Synset(models.Model):
 
     def short_display_name(self):
         return self.display_name or f"({self.pk})"
+
+    def definition_display(self):
+        return self.definition.replace(";", "; ")
 
     objects = SynsetManager()
 

@@ -371,13 +371,13 @@ class EditorViewTest(TestCase):
         self.assertEqual(not_itself, None)
 
     def test_guess_source_synset_view_existing(self):
-        with self.assertNumQueries(13):
+        with self.assertNumQueries(14):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_f))
             self.assertEqual(response.context["source_synset"], self.synset_d)
 
     def test_copied_source_synset(self):
-        with self.assertNumQueries(12):
+        with self.assertNumQueries(13):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)

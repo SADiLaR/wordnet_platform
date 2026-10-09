@@ -39,6 +39,10 @@
         <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
         {% include "editor/snippets/_sense_list.html" with senses=source_synset.sense_set.all %}
 
+        {% if source_relations %}
+          {% include "editor/snippets/_relations.html" with relations=source_relations readonly=True %}
+        {% endif %}
+
         {% if not synset.copied_from %}
           <button class="btn btn-sm btn-outline-secondary" disabled>{% trans "Link as source" %}</button>
           {# TODO: wire up Link button once editing is implemented #}

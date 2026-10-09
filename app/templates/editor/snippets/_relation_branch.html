@@ -2,11 +2,13 @@
 <pre class="relation-tree"><span
     class="connector"
     aria-hidden="true">{{ connector }}</span><a
-    href="{% url 'editor:synset_detail' pk=tgt_synset.pk %}">{{ tgt_synset }}</a><button type="button"
+    href="{% url 'editor:synset_detail' pk=tgt_synset.pk %}">{{ tgt_synset }}</a>{% if not readonly %}<button type="button"
     class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"
     aria-label="{% trans 'Delete relation' %}"
     data-bs-toggle="collapse"
-    data-bs-target="#del-{{ rel.pk }}">×</button></pre>
+    data-bs-target="#del-{{ rel.pk }}">×</button>{% endif %}</pre>
+{% if not readonly %}
 <div class="collapse" id="del-{{ rel.pk }}">
   {% include "editor/snippets/_delete_relation_confirm.html" with relation=rel %}
 </div>
+{% endif %}

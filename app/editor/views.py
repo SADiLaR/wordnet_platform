@@ -87,6 +87,24 @@ def browse_synsets(request):
     )
 
 
+def _build_relations(pk):
+    all_relations = Relation.objects.filter(
+        Q(synset_from=pk) | Q(synset_to=pk)
+    ).select_related("type", "synset_to", "synset_from")
+    relations = {"outgoing": defaultdict(list), "incoming": defaultdict(list)}
+
+    for rel in all_relations:
+        type_pk = rel.type_id
+        if pk == rel.synset_from_id:
+            direction = "outgoing"
+        else:
+            direction = "incoming"
+        if type_pk not in relations[direction]:
+            relations[direction][type_pk] = {"relations": [], "name": rel.type.name}
+        relations[direction][type_pk]["relations"].append(rel)
+    return {direction: dict(groups) for direction, groups in relations.items()}
+
+
 def _synset_context(pk=None, synset=None):
 
     if synset is None and pk is None:
@@ -119,21 +137,6 @@ def _synset_context(pk=None, synset=None):
         "senseexample_set"
     )
 
-    all_relations = Relation.objects.filter(
-        Q(synset_from=pk) | Q(synset_to=pk)
-    ).select_related("type", "synset_to", "synset_from")
-    relations = {"outgoing": defaultdict(list), "incoming": defaultdict(list)}
-
-    for rel in all_relations:
-        type_pk = rel.type_id
-        if synset == rel.synset_from:
-            direction = "outgoing"
-        else:
-            direction = "incoming"
-        if type_pk not in relations[direction]:
-            relations[direction][type_pk] = {"relations": [], "name": rel.type.name}
-        relations[direction][type_pk]["relations"].append(rel)
-
     if synset.copied_from_id:
         source_synset = synset.copied_from
     else:
@@ -147,9 +150,7 @@ def _synset_context(pk=None, synset=None):
     context = {
         "synset": synset,
         "senses": senses,
-        "relations": {
-            direction: dict(groups) for direction, groups in relations.items()
-        },
+        "relations": _build_relations(pk),
         "source_synset": source_synset,
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
         "concerns": concerns,
@@ -158,8 +159,9 @@ def _synset_context(pk=None, synset=None):
 
 
 def synset_detail(request, pk):
-
     context = _synset_context(pk)
+    if src_synset := context["source_synset"]:
+        context["source_relations"] = _build_relations(src_synset.pk)
     return render(
         request,
         "editor/synset_detail.html",

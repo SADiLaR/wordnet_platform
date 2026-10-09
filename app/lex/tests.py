@@ -176,6 +176,10 @@ class SynsetTestCase(TestCase):
         self.synset.save()
         self.assertEqual(self.synset.history.latest().change_details, test_change_msg)
 
+    def test_synset_definition_display(self):
+        self.synset.definition = "test;test two;  test three"
+        self.assertEqual(self.synset.definition_display(), "test; test two; test three")
+
 
 class RelationTestCase(TestCase):
     def setUp(self):

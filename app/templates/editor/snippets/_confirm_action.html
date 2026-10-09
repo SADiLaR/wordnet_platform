@@ -1,0 +1,12 @@
+{% load i18n %}
+<form class="mt-1 mb-3 d-flex gap-2 align-items-center"
+      hx-post="{{ post_url }}"
+      hx-target="{{ hx_target }}">
+    {% if field_name %}<input type="hidden" name="{{ field_name }}" value="{{ field_value }}">{% endif %}
+    <span class="small text-secondary">{{ confirm_message }}</span>
+    <button class="btn btn-sm {{ confirm_btn_class|default:'btn-danger' }} py-0">{{ confirm_label }}</button>
+    <button type="button"
+            class="btn btn-sm btn-outline-secondary py-0"
+            data-bs-toggle="collapse"
+            data-bs-target="#{{ cancel_prefix }}{{ cancel_pk }}">{% trans "Cancel" %}</button>
+</form>

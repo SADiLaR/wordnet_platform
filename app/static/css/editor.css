@@ -4,12 +4,15 @@
   --primary-light: #8288bc;
   --primary-fg: #fff;
   --sdlr-red: #d11f26;
+  --sdlr-red-rgb: 209, 31, 38;
   --bs-primary: var(--primary);
   --bs-primary-rgb: 26, 47, 105;
   --bs-blue: var(--primary);
   --bs-link-color: var(--primary);
   --bs-link-color-rgb: var(--bs-primary-rgb);
 
+  --bs-danger: var(--sdlr-red);
+  --bs-danger-rgb: var(--sdlr-red-rgb);
   --bs-danger-bg-subtle: color-mix(in srgb, var(--sdlr-red) 20%, white);
   --bs-danger-border-subtle: color-mix(in srgb, var(--sdlr-red) 40%, white);
   --bs-danger-text-emphasis: color-mix(in srgb, var(--sdlr-red) 40%, black);
@@ -113,7 +116,26 @@ code {
   margin-top: 0.25rem;
 }
 
-/* ── Add buttons ── */
+/* ── Add / delete buttons ── */
+.btn-delete {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.btn-delete:hover {
+  background-color: rgba(var(--bs-danger-rgb), 0.1);
+}
+
+.relation-tree:hover .btn-delete,
+.btn-delete:focus,
+.btn-delete[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.btn-delete[aria-expanded="true"] {
+  background-color: rgba(var(--bs-danger-rgb), 0.15);
+}
+
 .btn-add {
   color: rgb(var(--draft-color));
   border-color: rgb(var(--draft-color));
@@ -127,11 +149,13 @@ code {
 
 /* ── Relation tree ── */
 .relation-tree {
-  line-height: 1.1;
+  line-height: 1.0;
+  margin: 0;
+  overflow: visible;
 }
 
 .relation-tree .connector {
-  font-size: 1.4em;
+  font-size: 1.6em;
 }
 
 .relation-tree a {

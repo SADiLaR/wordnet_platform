@@ -164,7 +164,6 @@ code {
   max-width: calc(100% - 11em);
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: bottom;
 }
 
 /* ── Search results ── */
@@ -175,7 +174,6 @@ code {
 .results .dropdown-item {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ── Inline editable forms ── */

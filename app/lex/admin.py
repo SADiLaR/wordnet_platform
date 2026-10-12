@@ -64,6 +64,8 @@ class PartOfSpeechAdmin(admin.ModelAdmin):
 
 class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
     list_filter = ["wordnet", "status", "pos"]
+    # Django goes wonky and joins with unnecessary tables without this:
+    list_select_related = ["pos"]
     list_display = ["__str__", "pos"]
     search_fields = ["sense__word__text", "definition"]
     raw_id_fields = ("copied_from",)

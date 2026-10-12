@@ -159,7 +159,7 @@ if DEBUG:
         def __contains__(self, address):
             """Check if the given address is contained in any of the networks."""
             return any(
-                [ipaddress.ip_address(address) in network for network in self.networks]
+                ipaddress.ip_address(address) in network for network in self.networks
             )
 
     if host_ip:

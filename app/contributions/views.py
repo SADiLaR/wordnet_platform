@@ -176,12 +176,12 @@ def contribution_history(request, page_size=FALLBACK_PAGE_SIZE, extra_context=No
 def synset_contribution_history(request, synset_id, extra_context=None):
 
     synset = get_object_or_404(Synset, pk=synset_id)
-    data = dict(
-        user=request.GET.get("user"),
-        wordnet=request.GET.get("wordnet"),
-        start_date=request.GET.get("start_date"),
-        end_date=request.GET.get("end_date"),
-    )
+    data = {
+        "user": request.GET.get("user"),
+        "wordnet": request.GET.get("wordnet"),
+        "start_date": request.GET.get("start_date"),
+        "end_date": request.GET.get("end_date"),
+    }
 
     # prepare filters
     # We require that change_details be non-empty. Empty change_details

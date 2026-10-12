@@ -1,7 +1,24 @@
 from django.apps import apps
 from django.db import models
 from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models.expressions import Value
+from django.db.models.fields import IntegerField
+from django.db.models.lookups import Func
 from django.utils.translation import gettext_lazy as _
+
+
+class RegexpCount(Func):
+    """Return the number of occurrences of the given regex expression."""
+
+    function = "REGEXP_COUNT"
+    output_field = IntegerField()
+
+    def __init__(self, expression, regex, **extra):
+        # This takes `regex` as a literal regular expression, instead of a
+        # reference that could (e.g.) refer to a column:
+        if isinstance(regex, str):
+            regex = Value(regex)
+        super().__init__(expression, regex, **extra)
 
 
 class WordManager(models.Manager):
@@ -28,14 +45,22 @@ class WordManager(models.Manager):
             "qs": self.get_queryset().filter(text__regex=r"[/;,]"),
         }
 
-    def _suspicious_opening_bracket(self):
+    def _suspicious_brackets(self):
         return {
-            "key": "suspicious-opening-bracket",
-            "name": _("Suspicious opening bracket in word"),
+            "key": "suspicious-bracket",
+            "name": _("Suspicious brackets or spacing in word"),
             "qs": (
                 self.get_queryset()
-                .filter(text__contains="(")
-                .exclude(text__contains=" (")
+                .annotate(
+                    bracket_difference=(
+                        RegexpCount("text", r"\(") - RegexpCount("text", r"\)")
+                    )
+                )
+                .filter(
+                    Q(text__regex=r"[^ ]\(")  # bracket not at start and without space
+                    | Q(text__regex=r"\)[^ ]")  # bracket not and end and without space
+                    | ~Q(bracket_difference=0),  # unequal number of brackets "(", ")"
+                )
             ),
         }
 
@@ -43,7 +68,7 @@ class WordManager(models.Manager):
         return [
             self._language_mismatch(),
             self._suspicious_characters(),
-            self._suspicious_opening_bracket(),
+            self._suspicious_brackets(),
         ]
 
 

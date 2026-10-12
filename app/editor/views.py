@@ -106,7 +106,6 @@ def _build_relations(pk):
 
 
 def _synset_context(pk=None, synset=None):
-
     if synset is None and pk is None:
         raise ValueError("Either pk or synset must be provided")
     if synset is None:
@@ -124,13 +123,7 @@ def _synset_context(pk=None, synset=None):
             concerns.append(concern)
 
     for concern in Word.objects.concerns():
-        if (
-            concern["qs"]
-            .filter(
-                sense__synset=synset,
-            )
-            .exists()
-        ):
+        if concern["qs"].filter(sense__synset=synset).exists():
             concerns.append(concern)
 
     senses = synset.sense_set.select_related("word").prefetch_related(

@@ -45,14 +45,22 @@ class WordManager(models.Manager):
             "qs": self.get_queryset().filter(text__regex=r"[/;,]"),
         }
 
-    def _suspicious_opening_bracket(self):
+    def _suspicious_brackets(self):
         return {
-            "key": "suspicious-opening-bracket",
-            "name": _("Suspicious opening bracket in word"),
+            "key": "suspicious-bracket",
+            "name": _("Suspicious brackets or spacing in word"),
             "qs": (
                 self.get_queryset()
-                .filter(text__contains="(")
-                .exclude(text__contains=" (")
+                .annotate(
+                    bracket_difference=(
+                        RegexpCount("text", r"\(") - RegexpCount("text", r"\)")
+                    )
+                )
+                .filter(
+                    Q(text__regex=r"[^ ]\(")  # bracket not at start and without space
+                    | Q(text__regex=r"\)[^ ]")  # bracket not and end and without space
+                    | ~Q(bracket_difference=0),  # unequal number of brackets "(", ")"
+                )
             ),
         }
 
@@ -60,7 +68,7 @@ class WordManager(models.Manager):
         return [
             self._language_mismatch(),
             self._suspicious_characters(),
-            self._suspicious_opening_bracket(),
+            self._suspicious_brackets(),
         ]
 
 

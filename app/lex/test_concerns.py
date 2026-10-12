@@ -46,14 +46,28 @@ class WordConcernTests(TestCase):
         concern = self._get_concern("suspicious-characters")
         self.assertTrue(concern["qs"].filter(pk=word.pk).exists())
 
-    def test_suspicious_opening_bracket(self):
-        word = Word.objects.create(
-            text="cat(test)",
-            pos=self.pos_noun,
-            language=self.language,
-        )
-        concern = self._get_concern("suspicious-opening-bracket")
-        self.assertTrue(concern["qs"].filter(pk=word.pk).exists())
+    def test_suspicious_bracket(self):
+        concern = self._get_concern("suspicious-bracket")
+        cases = [
+            # (str, concerning)
+            ("(go) dula", False),
+            ("play (n)", False),
+            ("(something)$", True),
+            ("^(something)", True),
+            ("cat(test)", True),
+            ("(cat)test", True),
+            ("stray (cat", True),
+            ("stray) cat", True),
+            ("normal (bracket) case", False),
+        ]
+        for text, concerning in cases:
+            with self.subTest(text):
+                word = Word.objects.create(
+                    text=text,
+                    pos=self.pos_noun,
+                    language=self.language,
+                )
+                self.assertIs(concern["qs"].filter(pk=word.pk).exists(), concerning)
 
 
 class SynsetConcernTests(TestCase):

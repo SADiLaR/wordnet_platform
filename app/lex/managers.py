@@ -1,7 +1,24 @@
 from django.apps import apps
 from django.db import models
 from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models.expressions import Value
+from django.db.models.fields import IntegerField
+from django.db.models.lookups import Func
 from django.utils.translation import gettext_lazy as _
+
+
+class RegexpCount(Func):
+    """Return the number of occurrences of the given regex expression."""
+
+    function = "REGEXP_COUNT"
+    output_field = IntegerField()
+
+    def __init__(self, expression, regex, **extra):
+        # This takes `regex` as a literal regular expression, instead of a
+        # reference that could (e.g.) refer to a column:
+        if isinstance(regex, str):
+            regex = Value(regex)
+        super().__init__(expression, regex, **extra)
 
 
 class WordManager(models.Manager):

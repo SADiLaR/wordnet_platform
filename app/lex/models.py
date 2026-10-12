@@ -303,7 +303,7 @@ class Relation(models.Model):
     )
     type = models.ForeignKey("RelationType", on_delete=models.PROTECT, blank=False)
     display_name = models.CharField(
-        max_length=270, verbose_name=_("display_name"), default="no_display_name"
+        max_length=270, verbose_name=_("display name"), default="no_display_name"
     )
     history = HistoricalRecords(excluded_fields=["display_name"])
 

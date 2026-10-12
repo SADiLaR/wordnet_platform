@@ -1,7 +1,7 @@
 import csv
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
 
@@ -136,7 +136,7 @@ class Command(BaseCommand):
 
         self.skipped_log_writer.writerow(
             {
-                "logged_at": datetime.now(timezone.utc).isoformat(),
+                "logged_at": datetime.now(UTC).isoformat(),
                 "stage": stage,
                 "reason": reason,
                 "error_type": type(error).__name__ if error is not None else "",

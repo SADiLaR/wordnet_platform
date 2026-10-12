@@ -58,6 +58,7 @@ class LanguageAdmin(admin.ModelAdmin):
 
 
 class PartOfSpeechAdmin(admin.ModelAdmin):
+    list_display = ["name", "short_name"]
     ordering = ["name"]
 
 
@@ -277,6 +278,7 @@ class RelationAdmin(SimpleHistoryAdmin):
     list_filter = ["type", "synset_from__wordnet", "synset_from__pos"]
     search_fields = ["synset_from__display_name", "synset_to__display_name"]
     raw_id_fields = ("synset_from", "synset_to")
+    readonly_fields = ["display_name"]
 
 
 admin.site.register(Language, LanguageAdmin)

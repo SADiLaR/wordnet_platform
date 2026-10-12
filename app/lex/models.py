@@ -2,6 +2,7 @@ import re
 
 from django.db import models
 from django.dispatch import receiver
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
@@ -136,6 +137,9 @@ class Synset(models.Model):
     def definition_display(self):
         # Add a space after semicolons so adjacent text is treated as separate words
         return re.sub(r"; *", "; ", self.definition)
+
+    def get_absolute_url(self):
+        return reverse("editor:synset_detail", kwargs={"pk": self.pk})
 
     objects = SynsetManager()
 

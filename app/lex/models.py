@@ -168,7 +168,7 @@ class Word(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.text} ({self.pos.short_name})"
+        return f"{self.text}"
 
     # TODO: needs more thought
     def save(self, *args, **kwargs):

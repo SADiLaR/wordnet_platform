@@ -4,7 +4,8 @@
   <ul class="dropdown-menu show w-100">
     {% for word in words %}
     <li>
-      <button class="dropdown-item"
+      <button
+          class="dropdown-item"
           name="word_pk"
           value="{{ word.pk }}"
           hx-post="{% url 'editor:add_sense_htmx' pk=synset.pk %}"

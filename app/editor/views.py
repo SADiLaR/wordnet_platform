@@ -327,19 +327,25 @@ def add_relation_htmx(request, pk):
 @require_POST
 def delete_relation_htmx(request, synset_pk, rel_pk):
     synset = get_object_or_404(Synset, pk=synset_pk)
-    relation = get_object_or_404(Relation, pk=rel_pk)
-    if not (relation.synset_from_id == synset_pk or relation.synset_to_id == synset_pk):
-        context = _synset_context(synset=synset)
-        context["error"] = _(
-            "Attempted to delete a relation not belonging to this synset."
-        )
-        return render(request, "editor/snippets/_relations.html", context)
-    relation.delete()
-    _save_updated_synset(synset)
+    context = {}
+    try:
+        relation = Relation.objects.get(pk=rel_pk)
+        if synset_pk not in (relation.synset_from_id, relation.synset_to_id):
+            context["error"] = _(
+                "Attempted to delete a relation not belonging to this synset."
+            )
+        else:
+            relation.delete()
+            _save_updated_synset(synset)
+    except Relation.DoesNotExist:
+        # We wanted it gone, so let's not complain. Could be a race condition between
+        # different users/windows, or a retry due to an unreceived response.
+        pass
+    context.update(_synset_context(synset=synset))
     return render(
         request,
         "editor/snippets/_relations.html",
-        context=_synset_context(synset=synset),
+        context=context,
     )
 
 

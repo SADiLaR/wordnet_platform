@@ -515,7 +515,7 @@ class EditorViewTest(TestCase):
                 {"type": self.relation_type.pk, "direction": "outgoing", "q": "toets"},
             )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "editor/snippets/_relation_results.html")
+        self.assertTemplateUsed(response, "editor/snippets/_synset_results.html")
         self.assertIsNotNone(response.context["synsets"])
 
     def test_suggest_relation_htmx_get_search_no_type(self):
@@ -528,7 +528,7 @@ class EditorViewTest(TestCase):
                 {"q": "toets"},
             )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "editor/snippets/_relation_results.html")
+        self.assertTemplateUsed(response, "editor/snippets/_synset_results.html")
         self.assertIsNotNone(response.context["synsets"])
 
     def test_add_relation_htmx_post_outgoing(self):

@@ -38,7 +38,7 @@ urlpatterns = [
         name="add_relation_form_htmx",
     ),
     path(
-        "synsets/<int:pk>/relations/search/",
+        "synsets/<int:pk>/search/",
         views.search_synsets_htmx,
         name="search_synsets_htmx",
     ),

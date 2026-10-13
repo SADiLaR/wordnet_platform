@@ -266,7 +266,7 @@ def search_synsets_htmx(request, pk):
     }
     return render(
         request,
-        "editor/snippets/_relation_results.html",
+        "editor/snippets/_synset_results.html",
         context,
     )
 

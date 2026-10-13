@@ -1,5 +1,5 @@
 {% load i18n %}
-<div class="d-flex gap-2">
+<div class="synset-search d-flex gap-2">
     <input type="search"
            name="q"
            class="form-control form-control-sm"
@@ -12,7 +12,7 @@
     >
     <button type="button" class="btn btn-sm btn-outline-secondary"
             hx-get="{% url 'editor:clear_htmx' %}"
-            hx-target="closest .relation-form"
+            hx-target="closest .synset-search"
     >
         {% trans "Cancel" %}
     </button>

@@ -36,7 +36,6 @@ between rows without being inside the <pre> element.
       {% endfor %}
       {% if not readonly %}
         {% include "editor/snippets/_relation_add_button.html" with connector="   └──▶&#xFE0E; " direction="outgoing" %}
-        <div class="relation-form"></div>
       {% endif %}
     </div>
   {% endfor %}
@@ -59,7 +58,6 @@ between rows without being inside the <pre> element.
       {% endfor %}
       {% if not readonly %}
         {% include "editor/snippets/_relation_add_button.html" with connector="    └── " direction="incoming" %}
-        <div class="relation-form"></div>
       {% endif %}
     </div>
   {% endfor %}

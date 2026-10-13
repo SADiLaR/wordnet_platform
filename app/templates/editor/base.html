@@ -35,11 +35,11 @@
 
 <footer class="footer container-fluid text-bg-primary py-3 link-light mt-auto"
         style="--bs-link-color-rgb: 255, 255, 255; --bs-link-color: #fff; --bs-btn-color: #fff;">
-  <div class="d-flex justify-content-center gap-3">
+  <div class="d-flex justify-content-center gap-3 align-items-center">
     <a href="{% url 'editor:about' %}" class="btn btn-link p-0">{% trans "About" %}</a>
     {% if user.is_authenticated %}
       <a href="{% url 'admin:index' %}" class="btn btn-link p-0">{% trans "Admin" %}</a>
-      <form method="post" action="{% url 'logout' %}">
+      <form class="d-flex" method="post" action="{% url 'logout' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-link p-0">{% trans "Logout" %}</button>
       </form>

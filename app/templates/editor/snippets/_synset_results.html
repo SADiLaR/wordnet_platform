@@ -1,7 +1,7 @@
 {% load i18n %}
 {% spaceless %}
 {% if synsets %}
-    <ul class="dropdown-menu show w-100">
+    <ul class="dropdown-menu show">
         {% for result in synsets %}
         <li>
             <button class="dropdown-item" name="target_pk" value="{{ result.pk }}">{{ result }}</button>

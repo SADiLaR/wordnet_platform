@@ -1,4 +1,6 @@
 {% load i18n %}
+<div class="senses-section">
+<h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
 {% if senses %}
   <ul class="list-unstyled mb-3">
     {% for sense in senses %}
@@ -13,3 +15,25 @@
 {% else %}
   <p class="text-secondary mb-3">{% trans "No words." %}</p>
 {% endif %}
+{% if error %}<p class="text-danger small mt-1 mb-2">{{ error }}</p>{% endif %}
+{% if not readonly %}
+<button
+    type="button"
+    class="btn btn-sm btn-add mb-3"
+    aria-label="{% trans 'Add word' %}"
+    data-bs-toggle="collapse"
+    data-bs-target="#add-word"
+>+ {% trans "Add word" %}</button>
+<div class="collapse" id="add-word">
+  <input type="search"
+      class="form-control form-control-sm mb-1"
+      placeholder="{% trans 'Search words…' %}"
+      aria-label="{% trans 'Search words' %}"
+      hx-get="{% url 'editor:search_words_htmx' pk=synset.pk %}"
+      hx-trigger="input changed delay:300ms"
+      hx-target="#word-results"
+      name="q">
+  <div id="word-results"></div>
+</div>
+{% endif %}
+</div>

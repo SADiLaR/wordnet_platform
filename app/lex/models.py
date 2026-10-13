@@ -114,7 +114,11 @@ class Synset(models.Model):
     def update_display_name(self):
         """We use display_name to avoid making DB calls in __str__().
         No historical record is kept of this change to the synset."""
-        senses = self.sense_set.all().order_by("word__text")[: MAX_WORDS + 1]
+        senses = (
+            self.sense_set.all()
+            .select_related("word")
+            .order_by("word__text")[: MAX_WORDS + 1]
+        )
         words = [s.word.text for s in senses]
 
         # we choose at most the first MAX_WORDS words to display

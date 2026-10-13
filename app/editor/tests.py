@@ -665,6 +665,127 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"")
 
+    def _get_search_words_url(self, synset_obj):
+        return reverse("editor:search_words_htmx", kwargs={"pk": synset_obj.pk})
+
+    def _get_add_sense_url(self, synset_obj):
+        return reverse("editor:add_sense_htmx", kwargs={"pk": synset_obj.pk})
+
+    def test_search_words_htmx_no_query(self):
+        # Returns empty response when q is missing
+        with self.assertNumQueries(0):
+            response = self.client.get(self._get_search_words_url(self.synset_a))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"")
+
+    def test_search_words_htmx_returns_matching_words(self):
+        # Queries:
+        # fetch synset (with wordnet, language, pos)
+        # search words (filtered by language, pos, text)
+        with self.assertNumQueries(2):
+            response = self.client.get(
+                self._get_search_words_url(self.synset_a), {"q": "toets"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_word_results.html")
+        self.assertContains(response, self.word_1.text)
+
+    def test_search_words_htmx_excludes_already_linked(self):
+        # word_1 is linked to synset_a via a new sense; should not appear in results
+        # Queries:
+        # fetch synset (with wordnet, language, pos)
+        # search words (excluding already-linked senses)
+        Sense.objects.create(word=self.word_1, synset=self.synset_a)
+        with self.assertNumQueries(2):
+            response = self.client.get(
+                self._get_search_words_url(self.synset_a), {"q": "toets"}
+            )
+        self.assertNotContains(response, self.word_1.text)
+
+    def test_add_sense_htmx_success(self):
+        # Queries:
+        # fetch synset (with wordnet, language, pos)
+        # fetch word (with language, pos)
+        # get_or_create sense check (SELECT)
+        # SAVEPOINT
+        # INSERT sense
+        # INSERT sense history
+        # fetch senses ordered by text (display_name recalculation)
+        # UPDATE synset (display_name save)
+        # RELEASE SAVEPOINT
+        # UPDATE synset (status → draft)
+        # INSERT synset history
+        # fetch senses with words (context)
+        # fetch sense examples (context)
+        with self.assertNumQueries(13):
+            response = self.client.post(
+                self._get_add_sense_url(self.synset_a),
+                {"word_pk": self.word_1.pk},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Sense.objects.filter(word=self.word_1, synset=self.synset_a).exists()
+        )
+
+    def test_add_sense_htmx_wrong_language(self):
+        # Queries:
+        # fetch synset (with wordnet, language, pos)
+        # fetch word (with language, pos)
+        # fetch senses (context — synset_a has no senses so no examples query)
+        other_language = Language.objects.create(iso_code="zul", name="isiZulu")
+        other_word = Word.objects.create(
+            text="ikhaya", pos=self.pos_noun, language=other_language
+        )
+        with self.assertNumQueries(3):
+            response = self.client.post(
+                self._get_add_sense_url(self.synset_a),
+                {"word_pk": other_word.pk},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("error", response.context)
+        self.assertFalse(
+            Sense.objects.filter(word=other_word, synset=self.synset_a).exists()
+        )
+
+    def test_add_sense_htmx_wrong_pos(self):
+        # Queries:
+        # fetch synset (with wordnet, language, pos)
+        # fetch word (with language, pos)
+        # fetch senses (context — synset_a has no senses so no examples query)
+        wrong_pos_word = Word.objects.create(
+            text="toets verb",
+            pos=self.pos_verb,
+            language=self.wordnet.language,
+        )
+        with self.assertNumQueries(3):
+            response = self.client.post(
+                self._get_add_sense_url(self.synset_a),
+                {"word_pk": wrong_pos_word.pk},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("error", response.context)
+        self.assertFalse(
+            Sense.objects.filter(word=wrong_pos_word, synset=self.synset_a).exists()
+        )
+
+    def test_add_sense_htmx_duplicate(self):
+        # word_1 is already linked to synset_b; adding it again should not create a new sense
+        # Queries:
+        # fetch synset (with wordnet, language, pos)
+        # fetch word (with language, pos)
+        # fetch senses with words (context)
+        # fetch sense examples (context)
+        with self.assertNumQueries(4):
+            response = self.client.post(
+                self._get_add_sense_url(self.synset_b),
+                {"word_pk": self.word_1.pk},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("error", response.context)
+        self.assertEqual(
+            Sense.objects.filter(word=self.word_1, synset=self.synset_b).count(), 1
+        )
+
 
 class AssignmentModelTest(TestCase):
     def setUp(self):

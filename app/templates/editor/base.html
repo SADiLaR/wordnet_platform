@@ -71,6 +71,11 @@
       updateStatusButtons();
     });
   });
+
+  document.addEventListener('shown.bs.collapse', function (e) {
+    const input = e.target.querySelector('input, textarea, select');
+    if (input) input.focus();
+  });
 </script>
 </body>
 </html>

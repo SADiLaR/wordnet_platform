@@ -28,6 +28,16 @@ urlpatterns = [
         name="synset_definition",
     ),
     path(
+        "synsets/<int:pk>/senses/add/",
+        views.add_sense_htmx,
+        name="add_sense_htmx",
+    ),
+    path(
+        "synsets/<int:pk>/senses/search/",
+        views.search_words_htmx,
+        name="search_words_htmx",
+    ),
+    path(
         "synsets/<int:pk>/relations/add/",
         views.add_relation_htmx,
         name="add_relation_htmx",

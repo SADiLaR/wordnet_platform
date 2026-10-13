@@ -3,12 +3,13 @@ from collections import defaultdict
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Q, prefetch_related_objects
+from django.db.models.functions import Length
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from lex.models import Relation, RelationType, Synset, Word, Wordnet
+from lex.models import Relation, RelationType, Sense, Synset, Word, Wordnet
 
 from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm
@@ -226,6 +227,63 @@ def synset_definition(request, pk):
             return render(request, "editor/synset_detail.html", context)
 
     return HttpResponseNotAllowed(["POST"])
+
+
+@require_GET
+def search_words_htmx(request, pk):
+    if not (q := request.GET.get("q")):
+        return HttpResponse("", content_type="text/html")
+
+    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+    words = (
+        Word.objects.filter(
+            language=synset.wordnet.language_id,
+            pos=synset.pos_id,
+            text__unaccent__icontains=q,
+        )
+        .exclude(sense__synset=synset)
+        .order_by(Length("text"), "text")
+    )
+
+    context = {
+        "synset": synset,
+        "words": words[:6],
+    }
+    return render(
+        request,
+        "editor/snippets/_word_results.html",
+        context,
+    )
+
+
+@require_POST
+def add_sense_htmx(request, pk):
+    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+
+    word_pk = request.POST.get("word_pk")
+    word = get_object_or_404(Word, pk=word_pk)
+
+    context = {
+        "synset": synset,
+        "senses": synset.sense_set.select_related("word").prefetch_related(
+            "senseexample_set"
+        ),
+    }
+
+    if word.language_id != synset.wordnet.language_id:
+        context["error"] = _("The word and synset belong to different languages.")
+        return render(request, "editor/snippets/_sense_list.html", context)
+    if word.pos_id != synset.pos_id:
+        context["error"] = _("The word and synset have different parts-of-speech.")
+        return render(request, "editor/snippets/_sense_list.html", context)
+    _sense, created = Sense.objects.get_or_create(synset=synset, word=word)
+    if not created:
+        context["error"] = _(
+            "The word '%(word)s' is already linked to this synset."
+        ) % {"word": word.text}
+        return render(request, "editor/snippets/_sense_list.html", context)
+    _save_updated_synset(synset)
+    return render(request, "editor/snippets/_sense_list.html", context=context)
 
 
 @require_GET

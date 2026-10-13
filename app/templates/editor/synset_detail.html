@@ -36,8 +36,7 @@
         <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
         <p class="mb-3">{{ source_synset.definition }}</p>
 
-        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
-        {% include "editor/snippets/_sense_list.html" with senses=source_synset.sense_set.all %}
+        {% include "editor/snippets/_sense_list.html" with senses=source_synset.sense_set.all readonly=True %}
 
         {% if source_relations %}
           {% include "editor/snippets/_relations.html" with relations=source_relations readonly=True %}
@@ -86,7 +85,6 @@
         <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
         {% include "editor/snippets/_definition_form.html" %}
 
-        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
         {% include "editor/snippets/_sense_list.html" with senses=senses %}
 
         <div id="relations-section">

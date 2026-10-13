@@ -343,5 +343,22 @@ def delete_relation_htmx(request, synset_pk, rel_pk):
 
 
 @require_GET
+def link_synset_form_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    context = {"source_wordnet": settings.SOURCE_WORDNET_ID, "synset": synset}
+    return render(request, "editor/snippets/_link_synset.html", context)
+
+
+@require_POST
+def link_synset_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    target_synset_pk = request.POST.get("target_pk")
+    target_synset = get_object_or_404(Synset, pk=target_synset_pk)
+    synset.copied_from = target_synset
+    _save_updated_synset(synset, updated_fields=["copied_from"])
+    return synset_detail(request, pk)
+
+
+@require_GET
 def clear_htmx(request):
     return HttpResponse("", content_type="text/html")

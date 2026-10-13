@@ -390,6 +390,21 @@ class EditorViewTest(TestCase):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
 
+    def test_link_source_synset(self):
+        self.synset_a.refresh_from_db()
+        self.assertIsNone(self.synset_a.copied_from)
+        with self.assertNumQueries(17):
+            response = self.client.post(
+                reverse(
+                    "editor:link_synset_htmx",
+                    kwargs={"pk": self.synset_a.pk},
+                ),
+                {"target_pk": self.synset_f.pk},
+            )
+            self.assertEqual(response.status_code, 200)
+        self.synset_a.refresh_from_db()
+        self.assertEqual(self.synset_a.copied_from_id, self.synset_f.pk)
+
     def test_status_htmx_get(self):
         with self.assertNumQueries(1):
             response = self.client.get(self._get_synset_status_htmx_url(self.synset_a))

@@ -255,13 +255,12 @@ def search_synsets_htmx(request, pk):
     if not (q := request.GET.get("q")):
         return HttpResponse("", content_type="text/html")
 
-    synset = get_object_or_404(Synset, pk=pk)
-    synsets = Synset.objects.filter(wordnet_id=synset.wordnet_id).only(
+    wordnet = get_object_or_404(Wordnet, pk=pk)
+    synsets = Synset.objects.filter(wordnet_id=wordnet.id).only(
         "display_name", "definition"
     )
     synsets = make_search_qs(synsets, q)
     context = {
-        "synset": synset,
         "synsets": synsets[:6],
     }
     return render(

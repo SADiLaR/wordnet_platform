@@ -36,5 +36,5 @@
             {% endfor %}
         </select>
     </div>
-    {% include "editor/snippets/_synset_search_bar.html" %}
+    {% include "editor/snippets/_synset_search_bar.html" with wordnet_id=synset.wordnet_id %}
 </form>

@@ -6,7 +6,7 @@
            placeholder="{% trans 'Search synsets…' %}"
            autocomplete="off"
            autofocus
-           hx-get="{% url 'editor:search_synsets_htmx' pk=synset.pk %}"
+           hx-get="{% url 'editor:search_synsets_htmx' pk=wordnet_id %}"
            hx-trigger="input delay:300ms"
            hx-target="next .results"
     >

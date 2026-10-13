@@ -215,8 +215,8 @@ class EditorViewTest(TestCase):
     def _get_add_relation_form_url(self, synset_obj):
         return reverse("editor:add_relation_form_htmx", kwargs={"pk": synset_obj.pk})
 
-    def _get_search_synset_url(self, synset_obj):
-        return reverse("editor:search_synsets_htmx", kwargs={"pk": synset_obj.pk})
+    def _get_search_synset_url(self, wordnet_id):
+        return reverse("editor:search_synsets_htmx", kwargs={"pk": wordnet_id})
 
     def _get_add_relation_url(self, synset_obj):
         return reverse("editor:add_relation_htmx", kwargs={"pk": synset_obj.pk})
@@ -511,20 +511,7 @@ class EditorViewTest(TestCase):
         # search query
         with self.assertNumQueries(2):
             response = self.client.get(
-                self._get_search_synset_url(self.synset_a),
-                {"type": self.relation_type.pk, "direction": "outgoing", "q": "toets"},
-            )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "editor/snippets/_synset_results.html")
-        self.assertIsNotNone(response.context["synsets"])
-
-    def test_suggest_relation_htmx_get_search_no_type(self):
-        # Queries:
-        # fetch synset
-        # search query
-        with self.assertNumQueries(2):
-            response = self.client.get(
-                self._get_search_synset_url(self.synset_a),
+                self._get_search_synset_url(self.synset_a.wordnet_id),
                 {"q": "toets"},
             )
         self.assertEqual(response.status_code, 200)

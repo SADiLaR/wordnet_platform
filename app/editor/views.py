@@ -127,8 +127,10 @@ def _synset_context(pk=None, synset=None):
         if concern["qs"].filter(sense__synset=synset).exists():
             concerns.append(concern)
 
-    senses = synset.sense_set.select_related("word").prefetch_related(
-        "senseexample_set"
+    senses = (
+        synset.sense_set.select_related("word")
+        .prefetch_related("senseexample_set")
+        .order_by("word__text")
     )
 
     if synset.copied_from_id:
@@ -136,9 +138,12 @@ def _synset_context(pk=None, synset=None):
     else:
         source_synset = _guess_source_synset(synset)
 
+    source_synset_senses = []
     if source_synset:
-        prefetch_related_objects(
-            [source_synset], "sense_set__word", "sense_set__senseexample_set"
+        source_synset_senses = (
+            source_synset.sense_set.select_related("word")
+            .prefetch_related("senseexample_set")
+            .order_by("word__text")
         )
 
     context = {
@@ -146,6 +151,7 @@ def _synset_context(pk=None, synset=None):
         "senses": senses,
         "relations": _build_relations(pk),
         "source_synset": source_synset,
+        "source_synset_senses": source_synset_senses,
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
         "concerns": concerns,
     }

@@ -48,6 +48,11 @@ urlpatterns = [
         name="search_words_htmx",
     ),
     path(
+        "synsets/<int:synset_pk>/senses/delete/<int:sense_pk>/",
+        views.delete_sense_htmx,
+        name="delete_sense_htmx",
+    ),
+    path(
         "synsets/<int:pk>/relations/add/",
         views.add_relation_htmx,
         name="add_relation_htmx",

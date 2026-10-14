@@ -319,18 +319,17 @@ def search_synsets_htmx(request, pk):
     if not (q := request.GET.get("q")):
         return HttpResponse("", content_type="text/html")
 
-    synset = get_object_or_404(Synset, pk=pk)
-    synsets = Synset.objects.filter(wordnet_id=synset.wordnet_id).only(
+    wordnet = get_object_or_404(Wordnet, pk=pk)
+    synsets = Synset.objects.filter(wordnet_id=wordnet.id).only(
         "display_name", "definition"
     )
     synsets = make_search_qs(synsets, q)
     context = {
-        "synset": synset,
         "synsets": synsets[:6],
     }
     return render(
         request,
-        "editor/snippets/_relation_results.html",
+        "editor/snippets/_synset_results.html",
         context,
     )
 
@@ -405,6 +404,23 @@ def delete_relation_htmx(request, synset_pk, rel_pk):
         "editor/snippets/_relations.html",
         context=_synset_context(synset=synset),
     )
+
+
+@require_GET
+def link_synset_form_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    context = {"source_wordnet": settings.SOURCE_WORDNET_ID, "synset": synset}
+    return render(request, "editor/snippets/_link_synset.html", context)
+
+
+@require_POST
+def link_synset_htmx(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    target_synset_pk = request.POST.get("target_pk")
+    target_synset = get_object_or_404(Synset, pk=target_synset_pk)
+    synset.copied_from = target_synset
+    _save_updated_synset(synset, updated_fields=["copied_from"])
+    return synset_detail(request, pk)
 
 
 @require_GET

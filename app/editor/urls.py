@@ -23,6 +23,16 @@ urlpatterns = [
         name="synset_status_htmx",
     ),
     path(
+        "synsets/<int:pk>/link_source/form/",
+        views.link_synset_form_htmx,
+        name="link_synset_form_htmx",
+    ),
+    path(
+        "synsets/<int:pk>/link_source/",
+        views.link_synset_htmx,
+        name="link_synset_htmx",
+    ),
+    path(
         "synsets/<int:pk>/definition/",
         views.synset_definition,
         name="synset_definition",
@@ -48,7 +58,7 @@ urlpatterns = [
         name="add_relation_form_htmx",
     ),
     path(
-        "synsets/<int:pk>/relations/search/",
+        "synsets/<int:pk>/search/",
         views.search_synsets_htmx,
         name="search_synsets_htmx",
     ),

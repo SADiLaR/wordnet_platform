@@ -20,7 +20,7 @@
 <div class="row g-3">
 
   <div class="col-md-6">
-    <div class="card mb-4">
+    <div id="source-synset" class="card mb-4">
       {% if source_synset %}
       <div class="card-header d-flex justify-content-between align-items-center">
         <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
@@ -43,8 +43,15 @@
         {% endif %}
 
         {% if not synset.copied_from %}
-          <button class="btn btn-sm btn-outline-secondary" disabled>{% trans "Link as source" %}</button>
-          {# TODO: wire up Link button once editing is implemented #}
+          <form
+              hx-post="{% url 'editor:link_synset_htmx' pk=synset.pk %}"
+              hx-target="#source-synset"
+              hx-select="#source-synset"
+              hx-swap="outerHTML"
+          >
+              <input type="hidden" name="target_pk" value="{{ source_synset.pk}}">
+              <button class="btn btn-sm btn-outline-secondary">{% trans "Link as source" %}</button>
+          </form>
         {% endif %}
 
       </div>
@@ -52,8 +59,12 @@
       <div class="card-header"><h2 class="h6 mb-0">{% trans "Source synset" %}</h2></div>
       <div class="card-body text-center py-4">
         <p class="text-secondary mb-3">{% trans "No source synset linked." %}</p>
-        <button class="btn btn-sm btn-outline-secondary" disabled>{% trans "Search for source" %}</button>
-        {# TODO: wire up Search button once editing is implemented #}
+        <button
+            class="btn btn-sm btn-outline-secondary"
+            hx-get="{% url 'editor:link_synset_form_htmx' pk=synset.pk %}"
+            hx-target="next .synset-form"
+        >{% trans "Search for source" %}</button>
+        <div class="synset-form"></div>
       </div>
       {% endif %}
     </div>

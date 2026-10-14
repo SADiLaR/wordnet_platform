@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, F, OuterRef, Subquery
+from django.db.models import Exists, OuterRef
 from django.shortcuts import render
 from django.urls import reverse
 
@@ -42,85 +42,49 @@ def _filter_concern_by_wordnet(queryset, model_name, wordnet_pk):
         )
 
 
-def _concern_counts_per_wordnet(queryset, model_name):
-    concern_ids = queryset.values("pk")
-
-    if model_name == "synset":
-        return (
-            Synset.objects.filter(pk__in=Subquery(concern_ids))
-            .values("wordnet_id")
-            .annotate(count=Count("pk"))
-        )
-
-    return (
-        Word.objects.filter(
-            pk__in=Subquery(concern_ids),
-            sense__synset__wordnet_id__isnull=False,
-        )
-        .annotate(wordnet_id=F("sense__synset__wordnet_id"))
-        .values("wordnet_id")
-        .annotate(count=Count("pk", distinct=True))
-    )
-
-
 def concerns_report(request):
     selected_wordnet = request.GET.get("wordnet")
     wordnets = list(Wordnet.objects.all().order_by("name"))
+    selected_concern = request.GET.get("concern")
 
-    wordnet_concerns = {
-        wordnet.pk: {
-            "wordnet": wordnet,
-            "groups": [],
-            "total_count": 0,
-        }
-        for wordnet in wordnets
-    }
+    concerns = []
 
-    for label, model_name, model in [
-        ("Word concerns", "word", Word),
-        ("Synset concerns", "synset", Synset),
+    for model_name, model in [
+        ("word", Word),
+        ("synset", Synset),
     ]:
-        # Create list of counts per concern per wordnet
-        concerns_by_wordnet = {wordnet.pk: [] for wordnet in wordnets}
-
         for concern in model.objects.concerns():
-            counts = _concern_counts_per_wordnet(
-                concern["qs"],
-                model_name,
+            if selected_concern and concern["key"] != selected_concern:
+                continue
+
+            queryset = concern["qs"]
+
+            if selected_wordnet:
+                queryset = _filter_concern_by_wordnet(
+                    queryset,
+                    model_name,
+                    selected_wordnet,
+                )
+
+            concerns.append(
+                {
+                    "key": concern["key"],
+                    "name": concern["name"],
+                    "description": concern["description"],
+                    "model_name": model_name,
+                    "count": queryset.count(),
+                }
             )
-
-            for result in counts:
-                wordnet_id = result["wordnet_id"]
-                count = result["count"]
-                concerns_by_wordnet[wordnet_id].append(
-                    {
-                        "name": concern["name"],
-                        "key": concern["key"],
-                        "count": result["count"],
-                        "model_name": model_name,
-                    }
-                )
-
-                wordnet_concerns[wordnet_id]["total_count"] += count
-
-        for wordnet in wordnets:
-            concerns = concerns_by_wordnet[wordnet.pk]
-            if concerns:
-                wordnet_concerns[wordnet.pk]["groups"].append(
-                    {
-                        "label": label,
-                        "concerns": concerns,
-                    }
-                )
-    wordnet_groups = list(wordnet_concerns.values())
 
     return render(
         request,
         "admin/concerns/summary.html",
         {
             **admin.site.each_context(request),
-            "wordnet_groups": wordnet_groups,
+            "concerns": concerns,
+            "wordnets": wordnets,
             "selected_wordnet": selected_wordnet,
+            "selected_concern": selected_concern,
         },
     )
 
@@ -128,20 +92,17 @@ def concerns_report(request):
 def concerns_detail(request, model_name, concern_key):
     model = CONCERN_MODELS[model_name]
     concern = _get_concern(model, concern_key)
-    wordnet_pk = request.GET.get("wordnet")
-    wordnet = Wordnet.objects.get(pk=wordnet_pk)
+    wordnets = Wordnet.objects.all().order_by("name")
+    wordnet = request.GET.get("wordnet")
 
-    queryset = _filter_concern_by_wordnet(
-        concern["qs"],
-        model_name,
-        wordnet_pk,
-    )
+    queryset = concern["qs"]
+
+    if wordnet:
+        queryset = _filter_concern_by_wordnet(queryset, model_name, wordnet)
 
     paginator = Paginator(queryset, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
-    page_range = paginator.get_elided_page_range(
-        page_obj.number,
-    )
+    page_range = paginator.get_elided_page_range(page_obj.number)
 
     items = [
         {
@@ -159,7 +120,8 @@ def concerns_detail(request, model_name, concern_key):
             "concern": concern,
             "items": items,
             "page_obj": page_obj,
-            "wordnet": wordnet,
+            "selected_wordnet": wordnet,
+            "wordnets": wordnets,
             "page_range": page_range,
         },
     )

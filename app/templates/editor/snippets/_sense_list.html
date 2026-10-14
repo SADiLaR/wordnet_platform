@@ -39,6 +39,7 @@
       type="search"
       class="form-control form-control-sm mb-1"
       placeholder="{% trans 'Search words…' %}"
+      autocomplete="off"
       aria-label="{% trans 'Search words' %}"
       hx-get="{% url 'editor:search_words_htmx' pk=synset.pk %}"
       hx-trigger="input changed delay:300ms"

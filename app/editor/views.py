@@ -6,6 +6,7 @@ from django.db.models import Q, prefetch_related_objects
 from django.db.models.functions import Length
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
@@ -168,6 +169,14 @@ def synset_detail(request, pk):
         "editor/synset_detail.html",
         context,
     )
+
+
+@require_POST
+def delete_synset(request, pk):
+    synset = get_object_or_404(Synset, pk=pk)
+    synset.delete()
+    url = f"{reverse('editor:browse_synsets')}?wordnet={synset.wordnet_id}"
+    return redirect(url)
 
 
 def synset_status_htmx(request, pk):

@@ -108,4 +108,41 @@
 
 </div>
 
+{% if not readonly %}
+<div class="mt-3">
+    <details class="border border-danger p-3">
+        <summary>{% trans "Danger zone" %}</summary>
+        <p>
+            {% if senses %}
+                {% blocktrans trimmed %}
+                You can only delete a synset once you have removed all the words.
+                {% endblocktrans %}
+            {% endif %}
+
+            {% blocktrans trimmed %}
+            Deleting this synset will permanently remove its definition, senses,
+            examples, relationships, and any link to the source language.
+            {% endblocktrans %}
+        </p>
+        {% if not senses %}
+            <form action="{% url 'editor:delete_synset' pk=synset.pk %}" method="post">
+                {% csrf_token %}
+                <input
+                    type="submit"
+                    class="btn btn-danger"
+                    value="{% trans 'Delete synset' %}"
+                >
+            </form>
+        {% endif %}
+
+       <div class="collapse" id="del-synset">
+            {% trans "Delete this synset?" as msg %}
+            {% trans "Delete" as label %}
+            {% url 'editor:delete_synset' synset_pk=synset.pk as url %}
+            {% include "editor/snippets/_confirm_action.html" with msg=msg url=url hx_target="#relations-section" label=label toggle_target="del-synset" %}
+       </div>
+    </details>
+</div>
+{% endif %}
+
 {% endblock %}

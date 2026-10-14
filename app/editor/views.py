@@ -79,6 +79,7 @@ def browse_synsets(request):
 
     context["page_obj"] = page_obj
     context["filter"] = f
+    context["q"] = f.form.cleaned_data.get("search", "").strip()
     context["url_params"] = url_params.urlencode()
 
     return render(
@@ -252,6 +253,7 @@ def search_words_htmx(request, pk):
     )
 
     context = {
+        "q": q.strip(),
         "synset": synset,
         "words": words[:6],
     }
@@ -325,6 +327,7 @@ def search_synsets_htmx(request, pk):
     )
     synsets = make_search_qs(synsets, q)
     context = {
+        "q": q.strip(),
         "synsets": synsets[:6],
     }
     return render(

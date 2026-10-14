@@ -18,6 +18,11 @@ urlpatterns = [
         name="synset_detail",
     ),
     path(
+        "synsets/<int:pk>/delete/",
+        views.delete_synset,
+        name="delete_synset",
+    ),
+    path(
         "synsets/<int:pk>/status/",
         views.synset_status_htmx,
         name="synset_status_htmx",

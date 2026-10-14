@@ -1,31 +1,29 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
+{% load static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans "Home" %}</a>
+    &rsaquo;
+    <!-- TODO: Replace hard-coded 'Lex' -->
+    <a href="{% url 'admin:app_list' app_label='lex' %}">Lex</a>
+    &rsaquo;
+    {% trans "Concerns" %}
+</div>
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'admin/css/changelists.css' %}">
+{% endblock %}
 
 {% block content %}
 <div id="content-main">
     <h1>{% trans "Wordnet Data Concerns" %}</h1>
-    <p>
-        {% trans "Potential data-quality issues grouped by Wordnet and problem type." %}
-    </p>
-{% for wordnet_group in wordnet_groups %}
-    <details
-        class="mb-4"
-        {% if selected_wordnet == wordnet_group.wordnet.pk|stringformat:"s" %}
-            open
-        {% endif %}
-    >
-        <summary>
-            <strong>{{ wordnet_group.wordnet.name }}</strong>
-            —
-            {% blocktranslate trimmed count count=wordnet_group.total_count %}
-                {{ count }} concern
-            {% plural %}
-                {{ count }} concerns
-            {% endblocktranslate %}
-        </summary>
-        <div class="results">
-            {% for group in wordnet_group.groups %}
-                <h3>{{ group.label }}</h3>
+    <div id="changelist" class="module filtered">
+        <div class="changelist-form-container">
+            <div class="results">
                 <table id="result_list">
                     <thead>
                         <tr>
@@ -34,21 +32,55 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for concern in group.concerns %}
-                            <tr>
-                                <td><a href="{% url 'concerns_detail' concern.model_name concern.key %}?wordnet={{ wordnet_group.wordnet.pk }}">
-                                    {{ concern.name }}</a>
-                                </td>
-                                <td>{{ concern.count }}</td>
-                            </tr>
-                        {% endfor %}
+                    {% for concern in concerns %}
+                    <tr>
+                        <td><a href="{% url 'concerns_detail' concern.model_name concern.key %}{% if selected_wordnet %}?wordnet={{ selected_wordnet }}{% endif %}">
+                                {{ concern.name }}</a>
+                        </td>
+                        <td>{{ concern.count }}</td>
+                    </tr>
+                    {% endfor %}
                     </tbody>
                 </table>
-            {% empty %}
-                <p>No concerns.</p>
-            {% endfor %}
+            </div>
         </div>
-    </details>
-{% endfor %}
+        <nav id="changelist-filter">
+            <h2>{% trans "Filter" %}</h2>
+            <details open>
+                <summary>{% trans "By wordnet" %}</summary>
+                <ul>
+                    <li {% if not selected_wordnet %}class="selected"{% endif %}>
+                        <a href="?{% if selected_concern %}concern={{ selected_concern }}{% endif %}">{% trans "All" %}</a>
+                    </li>
+                    {% for wordnet in wordnets %}
+                    <li {% if selected_wordnet == wordnet.pk|stringformat:"s" %}class="selected"{% endif %}>
+                        <a href="?wordnet={{ wordnet.pk }}{% if selected_concern %}&amp;concern={{ selected_concern }}{% endif %}">{{ wordnet.name }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            <details open>
+                <summary>{% trans "By concern" %}</summary>
+                <ul>
+                    <li {% if not selected_concern %}class="selected"{% endif %}>
+                        <a href="?{% if selected_wordnet %}wordnet={{ selected_wordnet }}{% endif %}">{% trans "All" %}</a>
+                    </li>
+                    {% for concern in concerns %}
+                    <li {% if selected_concern == concern.key %}class="selected"{% endif %}>
+                        <div class="concern-filter-item">
+                            <a href="?concern={{ concern.key }}{% if selected_wordnet %}&amp;wordnet={{ selected_wordnet }}{% endif %}">{{ concern.name }}</a>
+                            <span
+                                class="concern-info"
+                                tabindex="0"
+                                data-tooltip="{{ concern.description }}">
+                                <!-- TODO: Consider using characters in Unicode -->
+                                ⓘ</span>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+        </nav>
+    </div>
 </div>
 {% endblock %}

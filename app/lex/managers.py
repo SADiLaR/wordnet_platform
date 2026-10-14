@@ -30,7 +30,8 @@ class WordManager(models.Manager):
 
         return {
             "key": "language-mismatch",
-            "name": _("Word and wordnet have different languages"),
+            "name": _("Language mismatch"),
+            "description": _("Word and wordnet have different languages"),
             "qs": (
                 self.get_queryset()
                 .annotate(has_language_mismatch=Exists(mismatching_senses))
@@ -41,14 +42,16 @@ class WordManager(models.Manager):
     def _suspicious_characters(self):
         return {
             "key": "suspicious-characters",
-            "name": _("Word contains suspicious characters"),
+            "name": _("Suspicious characters"),
+            "description": _("Word contains suspicious characters"),
             "qs": self.get_queryset().filter(text__regex=r"[/;,]"),
         }
 
     def _suspicious_brackets(self):
         return {
             "key": "suspicious-bracket",
-            "name": _("Suspicious brackets or spacing in word"),
+            "name": _("Suspicious bracket"),
+            "description": _("Suspicious brackets or spacing in word"),
             "qs": (
                 self.get_queryset()
                 .annotate(
@@ -76,7 +79,8 @@ class SynsetManager(models.Manager):
     def _missing_definition(self):
         return {
             "key": "missing-definition",
-            "name": _("Synset without definition"),
+            "name": _("Missing definition"),
+            "description": _("Synset without definition"),
             "qs": self.get_queryset().filter(
                 Q(definition__isnull=True) | Q(definition="")
             ),
@@ -86,6 +90,7 @@ class SynsetManager(models.Manager):
         return {
             "key": "without-words",
             "name": _("Synset without words"),
+            "description": _("Synset without words"),
             "qs": (
                 self.get_queryset()
                 .annotate(sense_count=Count("sense"))
@@ -96,7 +101,8 @@ class SynsetManager(models.Manager):
     def _mixed_pos(self):
         return {
             "key": "mixed-word-pos",
-            "name": _("Words in synset have different parts of speech"),
+            "name": _("Mixed word parts of speech"),
+            "description": _("Words in synset have different parts of speech"),
             "qs": (
                 self.get_queryset()
                 .annotate(
@@ -117,7 +123,8 @@ class SynsetManager(models.Manager):
 
         return {
             "key": "word-pos-mismatch",
-            "name": _("Synset has a different part of speech than its words"),
+            "name": _("Part of speech mismatch"),
+            "description": _("Synset has a different part of speech than its words"),
             "qs": (
                 self.get_queryset()
                 .exclude(pos__name__iexact="multiple")
@@ -132,7 +139,8 @@ class SynsetManager(models.Manager):
 
         return {
             "key": "synset-example",
-            "name": _("Synset has a synset example"),
+            "name": _("Synset example present"),
+            "description": _("Synset has a synset example"),
             "qs": (
                 self.get_queryset()
                 .annotate(has_synset_example=Exists(synset_examples))

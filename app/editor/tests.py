@@ -788,6 +788,70 @@ class EditorViewTest(TestCase):
             Sense.objects.filter(word=self.word_1, synset=self.synset_b).count(), 1
         )
 
+    def _get_delete_sense_url(self, synset_obj, sense_obj):
+        return reverse(
+            "editor:delete_sense_htmx",
+            kwargs={"synset_pk": synset_obj.pk, "sense_pk": sense_obj.pk},
+        )
+
+    def test_delete_sense_htmx_success(self):
+        # Queries:
+        # fetch synset
+        # fetch sense
+        # fetch sense examples (pre-delete PROTECT check)
+        # DELETE sense
+        # INSERT sense history
+        # fetch senses with words (display_name recalculation)
+        # UPDATE synset (display_name)
+        # UPDATE synset (status → draft)
+        # INSERT synset history
+        # fetch senses with words (context)
+        with self.assertNumQueries(10):
+            response = self.client.post(
+                self._get_delete_sense_url(self.synset_c, self.sense_2)
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Sense.objects.filter(pk=self.sense_2.pk).exists())
+        self.synset_c.refresh_from_db()
+        self.assertEqual(self.synset_c.status, Synset.Status.DRAFT)
+
+    def test_delete_sense_htmx_wrong_synset(self):
+        # sense_1 belongs to synset_b, not synset_a
+        # Queries:
+        # fetch synset
+        # fetch sense
+        # fetch senses (context — synset_a has no senses so no examples query)
+        with self.assertNumQueries(3):
+            response = self.client.post(
+                self._get_delete_sense_url(self.synset_a, self.sense_1)
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("error", response.context)
+        self.assertTrue(Sense.objects.filter(pk=self.sense_1.pk).exists())
+
+    def test_delete_sense_htmx_invalid_synset(self):
+        # Queries:
+        # fetch synset (not found → 404)
+        invalid_url = reverse(
+            "editor:delete_sense_htmx",
+            kwargs={"synset_pk": 99999, "sense_pk": self.sense_1.pk},
+        )
+        with self.assertNumQueries(1):
+            response = self.client.post(invalid_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_sense_htmx_invalid_sense(self):
+        # Queries:
+        # fetch synset
+        # fetch sense (not found → 404)
+        invalid_url = reverse(
+            "editor:delete_sense_htmx",
+            kwargs={"synset_pk": self.synset_b.pk, "sense_pk": 99999},
+        )
+        with self.assertNumQueries(2):
+            response = self.client.post(invalid_url)
+        self.assertEqual(response.status_code, 404)
+
 
 class AssignmentModelTest(TestCase):
     def setUp(self):

@@ -123,7 +123,7 @@ code {
 }
 
 
-.relation-tree:hover .btn-delete,
+.hover-reveal-delete:hover .btn-delete,
 .btn-delete:focus,
 .btn-delete[aria-expanded="true"] {
   opacity: 1;

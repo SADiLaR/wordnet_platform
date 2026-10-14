@@ -294,6 +294,28 @@ def add_sense_htmx(request, pk):
     return render(request, "editor/snippets/_sense_list.html", context=context)
 
 
+@require_POST
+def delete_sense_htmx(request, synset_pk, sense_pk):
+    synset = get_object_or_404(Synset, pk=synset_pk)
+    sense = get_object_or_404(Sense.objects.select_related("synset"), pk=sense_pk)
+
+    context = {
+        "synset": synset,
+        "senses": synset.sense_set.select_related("word").prefetch_related(
+            "senseexample_set"
+        ),
+    }
+
+    if sense.synset_id != synset_pk:
+        context["error"] = _(
+            "Attempted to delete a sense not belonging to this synset."
+        )
+        return render(request, "editor/snippets/_sense_list.html", context)
+    sense.delete()
+    _save_updated_synset(synset)
+    return render(request, "editor/snippets/_sense_list.html", context=context)
+
+
 @require_GET
 def add_relation_form_htmx(request, pk):
     synset = get_object_or_404(Synset, pk=pk)

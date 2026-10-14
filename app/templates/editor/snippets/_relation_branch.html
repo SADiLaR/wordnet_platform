@@ -1,5 +1,5 @@
 {% load i18n %}
-<pre class="relation-tree"><span
+<pre class="relation-tree hover-reveal-delete"><span
     class="connector"
     aria-hidden="true">{{ connector }}</span><a
     href="{% url 'editor:synset_detail' pk=tgt_synset.pk %}">{{ tgt_synset }}</a>{% if not readonly %}<button

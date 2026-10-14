@@ -58,13 +58,16 @@ class LanguageAdmin(admin.ModelAdmin):
 
 
 class PartOfSpeechAdmin(admin.ModelAdmin):
+    list_display = ["name", "short_name"]
     ordering = ["name"]
 
 
 class SynsetAdmin(NestedModelAdmin, SimpleHistoryAdmin):
     list_filter = ["wordnet", "status", "pos"]
+    # Django goes wonky and joins with unnecessary tables without this:
+    list_select_related = ["pos"]
     list_display = ["__str__", "pos"]
-    search_fields = ["sense__word__text", "definition"]
+    search_fields = ["id", "sense__word__text", "definition"]
     raw_id_fields = ("copied_from",)
     exclude = ["display_name"]
     ordering = ["display_name"]
@@ -277,6 +280,7 @@ class RelationAdmin(SimpleHistoryAdmin):
     list_filter = ["type", "synset_from__wordnet", "synset_from__pos"]
     search_fields = ["synset_from__display_name", "synset_to__display_name"]
     raw_id_fields = ("synset_from", "synset_to")
+    readonly_fields = ["display_name"]
 
 
 admin.site.register(Language, LanguageAdmin)

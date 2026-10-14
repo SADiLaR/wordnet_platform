@@ -2,6 +2,7 @@ import re
 
 from django.db import models
 from django.dispatch import receiver
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
@@ -137,6 +138,9 @@ class Synset(models.Model):
         # Add a space after semicolons so adjacent text is treated as separate words
         return re.sub(r"; *", "; ", self.definition)
 
+    def get_absolute_url(self):
+        return reverse("editor:synset_detail", kwargs={"pk": self.pk})
+
     objects = SynsetManager()
 
 
@@ -168,7 +172,7 @@ class Word(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.text} ({self.pos.short_name})"
+        return f"{self.text}"
 
     # TODO: needs more thought
     def save(self, *args, **kwargs):
@@ -303,7 +307,7 @@ class Relation(models.Model):
     )
     type = models.ForeignKey("RelationType", on_delete=models.PROTECT, blank=False)
     display_name = models.CharField(
-        max_length=270, verbose_name=_("display_name"), default="no_display_name"
+        max_length=270, verbose_name=_("display name"), default="no_display_name"
     )
     history = HistoricalRecords(excluded_fields=["display_name"])
 

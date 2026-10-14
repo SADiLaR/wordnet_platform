@@ -690,7 +690,7 @@ class EditorViewTest(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_word_results.html")
-        self.assertContains(response, self.word_1.text)
+        self.assertContains(response, "<strong>toets</strong> woord", html=True)
 
     def test_search_words_htmx_excludes_already_linked(self):
         # word_1 is linked to synset_a via a new sense; should not appear in results

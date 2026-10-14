@@ -1,4 +1,5 @@
 {% extends "editor/base.html" %}
+{% load editor %}
 {% load i18n %}
 
 {% block title %}{% trans "Browse synsets" %} — {% trans "AfWN Editor" %}{% endblock %}
@@ -47,7 +48,7 @@
             <td><a
                     href="{% url 'editor:synset_detail' pk=synset.pk %}"
                     class="link-body-emphasis text-decoration-none"
-                >{{ synset }}</a></td>
+                >{{ synset | highlight:q }}</a></td>
             <td><spanclass="badge badge-status status-{{ synset.status }}">{{ synset.get_status_display }}</span></td>
             <td>{% if synset.copied_from %}<a
                     href="#"

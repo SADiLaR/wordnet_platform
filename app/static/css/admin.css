@@ -74,3 +74,34 @@ a.section:link, a.section:visited {
 fieldset .fieldset-heading, fieldset .inline-heading, :not(.inline-related) .collapse summary {
     color: var(--primary-white) !important;
 }
+.concern-filter-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.concern-info {
+    position: relative;
+    cursor: help;
+    flex-shrink: 0;
+}
+
+.concern-info:hover::after,
+.concern-info:focus::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    right: 0;
+    top: 24px;
+    z-index: 1000;
+
+    width: 220px;
+    padding: 8px 10px;
+
+    background: var(--body-fg);
+    color: var(--body-bg);
+    border-radius: 4px;
+
+    font-size: 12px;
+    line-height: 1.4;
+}

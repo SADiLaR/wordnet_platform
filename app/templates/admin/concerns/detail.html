@@ -1,10 +1,16 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
+{% load static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'admin/css/changelists.css' %}">
+{% endblock %}
 
 {% block content %}
 <div id="content-main">
     <p>
-        <a href="{% url 'concerns_report' %}?wordnet={{ wordnet.pk }}">
+        <a href="{% url 'concerns_report' %}">
             {% trans "Back to concerns" %}</a>
     </p>
     <h1>{{ concern.name }}</h1>
@@ -14,48 +20,61 @@
             {{ wordnet.name }}
         </p>
     {% endif %}
-    <div class="results">
-        <table id="result_list">
-            <thead>
-                <tr>
-                    <th scope="col">{% trans "ID" %}</th>
-                    <th scope="col">{% trans "Object" %}</th>
-                    <th scope="col"></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in items %}
-                    <tr><td>{{ item.obj.pk }}</td>
-                        <td>{{ item.obj }}</td>
-                        <td>
-                            <a href="{{ item.admin_url }}">{% trans "View" %}</a>
-                        </td>
-                    </tr>
-                {% empty %}
-                    <tr><td colspan="3">{% trans "No concerns found." %}</td></tr>
+    <div id="changelist" class="module filtered">
+        <div class="changelist-form-container">
+            <div class="results">
+                <table id="result_list">
+                    <thead>
+                        <tr>
+                            <th scope="col">{% trans "Object" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                            <tr><td><a href="{{ item.admin_url }}">{{ item.obj }}</a></td></tr>
+                        {% empty %}
+                            <tr><td colspan="3">{% trans "No concerns found." %}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if page_obj.paginator.num_pages > 1 %}
+            <p class="paginator">
+                {% for page in page_range %}
+                    {% if page == page_obj.paginator.ELLIPSIS %}
+                        …
+                    {% elif page == page_obj.number %}
+                        <span class="this-page">{{ page }}</span>
+                    {% else %}
+                    <a href="?page={{ page }}{% if wordnet %}&wordnet={{ wordnet.pk }}{% endif %}">
+                        {{ page }}
+                    </a>
+                    {% endif %}
                 {% endfor %}
-            </tbody>
-        </table>
-    </div>
-{% if page_obj.paginator.num_pages > 1 %}
-    <p class="paginator">
-        {% for page in page_range %}
-            {% if page == page_obj.paginator.ELLIPSIS %}
-                …
-            {% elif page == page_obj.number %}
-                <span class="this-page">{{ page }}</span>
-            {% else %}
-                <a href="?page={{ page }}{% if wordnet %}&wordnet={{ wordnet.pk }}{% endif %}">
-                    {{ page }}
-                </a>
+                {% blocktranslate trimmed count count=page_obj.paginator.count %}
+                    {{ count }} concern
+                {% plural %}
+                    {{ count }} concerns
+                {% endblocktranslate %}
+            </p>
             {% endif %}
-        {% endfor %}
-            {% blocktranslate trimmed count count=page_obj.paginator.count %}
-                {{ count }} concern
-            {% plural %}
-                {{ count }} concerns
-            {% endblocktranslate %}
-    </p>
-{% endif %}
+        </div>
+        <nav id="changelist-filter">
+            <h2>{% trans "Filter" %}</h2>
+            <details open>
+                <summary>{% trans "By wordnet" %}</summary>
+                <ul>
+                    <li {% if not selected_wordnet %}class="selected"{% endif %}>
+                        <a href="?">{% trans "All" %}</a>
+                    </li>
+                    {% for wordnet in wordnets %}
+                        <li {% if selected_wordnet == wordnet.pk|stringformat:"s" %}class="selected"{% endif %}>
+                            <a href="?wordnet={{ wordnet.pk }}">{{ wordnet.name }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </details>
+        </nav>
+    </div>
 </div>
 {% endblock %}

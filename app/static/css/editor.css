@@ -10,6 +10,7 @@
   --bs-blue: var(--primary);
   --bs-link-color: var(--primary);
   --bs-link-color-rgb: var(--bs-primary-rgb);
+  --bs-primary-bg-subtle: color-mix(in srgb, var(--primary) 20%, white);
 
   --bs-danger: var(--sdlr-red);
   --bs-danger-rgb: var(--sdlr-red-rgb);
@@ -46,8 +47,9 @@ code {
    --bs-card-border-color: var(--sdlr-red);
 }
 
-.limit-text-width {
-    max-width: 44rem;
+/* Match the header's dividing line to a border-* utility on the card. */
+.card > .card-header {
+  border-bottom-color: inherit;
 }
 
 /* Bootstrap 5.3's .invalid-feedback named for Django form error messages. */

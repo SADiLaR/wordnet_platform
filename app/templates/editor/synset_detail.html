@@ -20,12 +20,53 @@
 <div class="row g-3">
 
   <div class="col-md-6">
-    <div id="source-synset" class="card mb-4">
+    <div class="card border-primary mb-4">
+      <div class="card-header bg-primary-subtle">
+        <h2 class="h6 mb-0">{{ synset.wordnet }} {% trans "synset" %}</h2>
+      </div> {# TODO: improve for translation #}
+      <div class="card-body">
+
+        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
+        {% include "editor/snippets/_definition_form.html" %}
+
+        {% include "editor/snippets/_sense_list.html" with senses=senses %}
+
+        <div id="relations-section">
+            {% include "editor/snippets/_relations.html" %}
+        </div>
+
+      </div>
+    </div>
+    {# QA Warnings #}
+    <div class="card border-danger">
+        <div class="card-header bg-danger-subtle">
+            <h2 class="h6 mb-0">{% trans "QA Warnings" %}</h2>
+        </div>
+        <div class="card-body">
+            {% if concerns %}
+                <ul class="mb-0">
+                    {% for concern in concerns %}
+                        <li class="mb-2"><span aria-hidden="true">⚠</span> {{ concern.description }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-body-secondary mb-0">
+                    {% trans "No QA concerns found." %}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div
+        id="source-synset"
+        class="card {% if synset.copied_from %}border-primary{% else %}border-secondary-subtle{% endif %}"
+    >
       {% if source_synset %}
       <div class="card-header d-flex justify-content-between align-items-center">
         <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
         {% if synset.copied_from %}
-          <span class="text-body-tertiary small">{{ source_synset.wordnet }}</span>
+          <span class="text-body-secondary small">{{ source_synset.wordnet }}</span>
         {% else %}
           <span class="badge bg-secondary">{% trans "Suggested" %}</span>
         {% endif %}
@@ -67,42 +108,6 @@
         <div class="synset-form"></div>
       </div>
       {% endif %}
-    </div>
-    {# QA Warnings #}
-    <div class="card">
-        <div class="card-header">
-            <h2 class="h6 mb-0">{% trans "QA Warnings" %}</h2>
-        </div>
-        <div class="card-body">
-            {% if concerns %}
-                <ul class="mb-0">
-                    {% for concern in concerns %}
-                        <li class="mb-2"> ⚠ {{ concern.description }}</li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="text-body-secondary mb-0">
-                    {% trans "No QA concerns found." %}
-                </p>
-            {% endif %}
-        </div>
-    </div>
-  </div>
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-header"><h2 class="h6 mb-0">{{ synset.wordnet }} {% trans "synset" %}</h2></div> {# TODO: improve for translation #}
-      <div class="card-body">
-
-        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
-        {% include "editor/snippets/_definition_form.html" %}
-
-        {% include "editor/snippets/_sense_list.html" with senses=senses %}
-
-        <div id="relations-section">
-            {% include "editor/snippets/_relations.html" %}
-        </div>
-
-      </div>
     </div>
   </div>
 

@@ -1,0 +1,5 @@
+{% load i18n %}
+{% trans "Remove this synset example from the synset?" as confirm_message %}
+{% trans "Remove" as confirm_label %}
+{% url 'editor:delete_synsetexample_htmx' synset_pk=example.synset_id pk=example.pk as delete_url %}
+{% include "editor/snippets/_confirm_action.html" with confirm_message=confirm_message post_url=delete_url hx_target="closest .synset-examples" confirm_label=confirm_label cancel_prefix="del-example-" cancel_pk=example.pk %}

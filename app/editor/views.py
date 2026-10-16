@@ -10,7 +10,15 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from lex.models import Relation, RelationType, Sense, Synset, Word, Wordnet
+from lex.models import (
+    Relation,
+    RelationType,
+    Sense,
+    Synset,
+    SynsetExample,
+    Word,
+    Wordnet,
+)
 
 from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm
@@ -113,7 +121,9 @@ def _synset_context(pk=None, synset=None):
         raise ValueError("Either pk or synset must be provided")
     if synset is None:
         synset = get_object_or_404(
-            Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet"),
+            Synset.objects.select_related(
+                "pos", "wordnet", "copied_from__wordnet"
+            ).prefetch_related("synsetexample_set"),
             pk=pk,
         )
     if not pk:
@@ -270,6 +280,21 @@ def search_words_htmx(request, pk):
         request,
         "editor/snippets/_word_results.html",
         context,
+    )
+
+
+@require_POST
+def delete_synsetexample_htmx(request, synset_pk, pk):
+    synset = get_object_or_404(Synset, pk=synset_pk)
+    synsetexample = get_object_or_404(SynsetExample, pk=pk)
+    synsetexample.delete()
+
+    contex = {"synset": synset}
+
+    return render(
+        request,
+        "editor/snippets/_synsetexample.html",
+        contex,
     )
 
 

@@ -53,6 +53,11 @@ urlpatterns = [
         name="search_words_htmx",
     ),
     path(
+        "synset/<int:synset_pk>/synset_example/delete/<int:pk>",
+        views.delete_synsetexample_htmx,
+        name="delete_synsetexample_htmx",
+    ),
+    path(
         "synsets/<int:synset_pk>/senses/delete/<int:sense_pk>/",
         views.delete_sense_htmx,
         name="delete_sense_htmx",

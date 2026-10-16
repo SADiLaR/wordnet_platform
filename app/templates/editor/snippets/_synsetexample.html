@@ -1,0 +1,28 @@
+{% load i18n %}
+{% with examples=synset.synsetexample_set.all %}
+{% if examples %}
+<div class="synset-examples">
+    <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">
+        {% trans "Synset Examples" %}
+    </h3>
+    <ul class="list-unstyled mb-3">
+        {% for example in examples %}
+            <li class="hover-reveal-delete py-2 border-bottom">
+                <span class="fw-medium">{{ example.text }}</span>
+                <button
+                    type="button"
+                    class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"
+                    aria-label="{% trans 'Delete synset example' %}"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#del-example-{{ example.pk }}"
+                >×</button>
+                <div class="collapse" id="del-example-{{ example.pk }}">
+                    {% include "editor/snippets/_delete_synsetexample_confirm.html" with example=example %}
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% if error %}<p class="text-danger small mt-1 mb-2">{{ error }}</p>{% endif %}
+</div>
+{% endif %}
+{% endwith %}

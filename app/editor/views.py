@@ -10,7 +10,15 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from lex.models import Relation, RelationType, Sense, Synset, Word, Wordnet
+from lex.models import (
+    Relation,
+    RelationType,
+    Sense,
+    Synset,
+    SynsetExample,
+    Word,
+    Wordnet,
+)
 
 from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm
@@ -113,7 +121,9 @@ def _synset_context(pk=None, synset=None):
         raise ValueError("Either pk or synset must be provided")
     if synset is None:
         synset = get_object_or_404(
-            Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet"),
+            Synset.objects.select_related(
+                "pos", "wordnet", "copied_from__wordnet"
+            ).prefetch_related("synsetexample_set"),
             pk=pk,
         )
     if not pk:
@@ -270,6 +280,31 @@ def search_words_htmx(request, pk):
         request,
         "editor/snippets/_word_results.html",
         context,
+    )
+
+
+@require_POST
+def delete_synset_example_htmx(request, synset_pk, pk):
+    synset = get_object_or_404(Synset, pk=synset_pk)
+    context = {}
+    try:
+        synsetexample = SynsetExample.objects.get(pk=pk)
+        if synset_pk != synsetexample.synset_id:
+            context["error"] = _(
+                "Attempted to delete a synset example not belonging to this synset."
+            )
+        else:
+            synsetexample.delete()
+    except SynsetExample.DoesNotExist:
+        # We wanted it gone, so let's not complain. Could be a race condition between
+        # different users/windows, or a retry due to an unreceived response.
+        pass
+
+    contex = {"examples": synset.synsetexample_set.all}
+    return render(
+        request,
+        "editor/snippets/_synsetexample.html",
+        contex,
     )
 
 

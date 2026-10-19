@@ -57,19 +57,31 @@
     });
   }
 
-  document.querySelectorAll('[data-unsaved-track]').forEach(function(el) {
+  function trackUnsaved(el) {
     const original = el.value;
     const hint = document.createElement('span');
     hint.className = 'field-unsaved-hint';
     hint.textContent = 'Unsaved changes'; // TODO: translate once Django JS i18n is configured
     hint.hidden = true;
     el.insertAdjacentElement('afterend', hint);
-    el.addEventListener('input', function() {
+    function update() {
       const dirty = el.value !== original;
       el.classList.toggle('field-unsaved', dirty);
       hint.hidden = !dirty;
       updateStatusButtons();
-    });
+    }
+    el.addEventListener('input', update);
+    if (el.form) {
+      // The reset event fires before the form's values are restored.
+      el.form.addEventListener('reset', function() { setTimeout(update); });
+    }
+  }
+
+  // HTMX fires htmx:load for the whole page once it starts, and again for each
+  // fragment it swaps in, so fields in swapped-in snippets are tracked too.
+  document.addEventListener('htmx:load', function(e) {
+    e.detail.elt.querySelectorAll('[data-unsaved-track]').forEach(trackUnsaved);
+    updateStatusButtons();
   });
 
   document.addEventListener('shown.bs.collapse', function (e) {

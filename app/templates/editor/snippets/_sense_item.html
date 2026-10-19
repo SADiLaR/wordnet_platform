@@ -1,0 +1,60 @@
+{% load i18n editor %}
+<li class="sense-item hover-reveal-delete py-2 border-bottom">
+  <span class="fw-medium">{{ sense.word.text }}</span>{% if not readonly %}
+  <button
+      type="button"
+      class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"
+      aria-label="{% trans 'Delete word' %}"
+      data-bs-toggle="collapse"
+      data-bs-target="#del-sense-{{ sense.pk }}"
+  >×</button>
+  {% endif %}
+  {% for example in sense.senseexample_set.all %}
+    {# The text and its edit form share one form: an error opens the form, hides the text #}
+    {% with form=sense|example_form:example %}
+      <div
+          class="hover-reveal-delete collapse mt-1 ex-{{ example.pk }}
+                 {% if not form.errors %}show{% endif %}
+                 {% if example.pk == saved_pk %}just-saved{% endif %}"
+      >
+        <q class="text-secondary fst-italic small">{{ example.text }}</q>{% if not readonly %}
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary btn-edit py-0 ms-2"
+            aria-label="{% trans 'Edit example' %}"
+            data-bs-toggle="collapse"
+            data-bs-target=".ex-{{ example.pk }}"
+        >✎</button>
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-danger btn-delete py-0 ms-1"
+            aria-label="{% trans 'Delete example' %}"
+            data-bs-toggle="collapse"
+            data-bs-target="#del-sense-example-{{ example.pk }}"
+        >×</button>
+        <div
+            class="collapse"
+            id="del-sense-example-{{ example.pk }}"
+        >{% include "editor/snippets/_delete_sense_example_confirm.html" %}</div>
+        {% endif %}
+      </div>
+      {% if not readonly %}
+        {% include "editor/snippets/_sense_example_form.html" %}
+      {% endif %}
+    {% endwith %}
+  {% endfor %}
+  {% if not readonly %}
+    {# Below the examples: removing the word deletes them too. #}
+    <div
+        class="collapse"
+        id="del-sense-{{ sense.pk }}"
+    >{% include "editor/snippets/_delete_sense_confirm.html" %}</div>
+    <button
+        type="button"
+        class="btn btn-sm btn-link text-secondary d-block p-0 mt-1"
+        data-bs-toggle="collapse"
+        data-bs-target=".add-ex-{{ sense.pk }}"
+    >+ {% trans "Add usage example" %}</button>
+    {% include "editor/snippets/_sense_example_form.html" with form=sense|example_form %}
+  {% endif %}
+</li>

@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Q, prefetch_related_objects
+from django.db.models import Prefetch, Q, prefetch_related_objects
 from django.db.models.functions import Length
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,10 +10,18 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from lex.models import Relation, RelationType, Sense, Synset, Word, Wordnet
+from lex.models import (
+    Relation,
+    RelationType,
+    Sense,
+    SenseExample,
+    Synset,
+    Word,
+    Wordnet,
+)
 
 from .filters import SynsetFilter, make_search_qs
-from .forms import DefinitionForm
+from .forms import DefinitionForm, SenseExampleForm
 
 
 def about(request):
@@ -52,6 +60,23 @@ def _save_updated_synset(synset, updated_fields=None):
         synset.status = Synset.Status.DRAFT
         updated_fields.append("status")
     synset.save(update_fields=updated_fields)
+
+
+def _examples_prefetch(lookup="senseexample_set"):
+    # Examples with empty text are left over from the old tool; treat them as missing.
+    # Alphabetical, by the database's collation; pk only breaks ties between duplicates.
+    return Prefetch(
+        lookup,
+        queryset=SenseExample.objects.exclude(text="").order_by("text", "pk"),
+    )
+
+
+def _senses(synset):
+    return (
+        synset.sense_set.select_related("word")
+        .prefetch_related(_examples_prefetch())
+        .order_by("word__text")
+    )
 
 
 def assignment_queue(request, wn_pk=None):
@@ -129,11 +154,7 @@ def _synset_context(pk=None, synset=None):
         if concern["qs"].filter(sense__synset=synset).exists():
             concerns.append(concern)
 
-    senses = (
-        synset.sense_set.select_related("word")
-        .prefetch_related("senseexample_set")
-        .order_by("word__text")
-    )
+    senses = _senses(synset)
 
     if synset.copied_from_id:
         source_synset = synset.copied_from
@@ -142,11 +163,7 @@ def _synset_context(pk=None, synset=None):
 
     source_synset_senses = []
     if source_synset:
-        source_synset_senses = (
-            source_synset.sense_set.select_related("word")
-            .prefetch_related("senseexample_set")
-            .order_by("word__text")
-        )
+        source_synset_senses = _senses(source_synset)
 
     context = {
         "synset": synset,
@@ -195,7 +212,9 @@ def synset_status_htmx(request, pk):
                 warnings.append(_("No definition."))
 
             prefetch_related_objects(
-                [synset], "sense_set__senseexample_set", "sense_set__word"
+                [synset],
+                _examples_prefetch("sense_set__senseexample_set"),
+                "sense_set__word",
             )
             if len(synset.sense_set.all()) < 1:
                 warnings.append(_("No words."))
@@ -282,9 +301,7 @@ def add_sense_htmx(request, pk):
 
     context = {
         "synset": synset,
-        "senses": synset.sense_set.select_related("word").prefetch_related(
-            "senseexample_set"
-        ),
+        "senses": _senses(synset),
     }
 
     if word.language_id != synset.wordnet.language_id:
@@ -310,9 +327,7 @@ def delete_sense_htmx(request, synset_pk, sense_pk):
 
     context = {
         "synset": synset,
-        "senses": synset.sense_set.select_related("word").prefetch_related(
-            "senseexample_set"
-        ),
+        "senses": _senses(synset),
     }
 
     if sense.synset_id != synset_pk:
@@ -323,6 +338,67 @@ def delete_sense_htmx(request, synset_pk, sense_pk):
     sense.delete()
     _save_updated_synset(synset)
     return render(request, "editor/snippets/_sense_list.html", context=context)
+
+
+def _render_sense_item(request, synset, sense, failed_form=None, saved_pk=None):
+    # A form that failed validation is attached to the sense, so the template can
+    # re-open that one form with its errors (see the `example_form` filter). It isn't
+    # a model field; it only exists on this instance, for this response.
+    prefetch_related_objects([sense], _examples_prefetch())
+    sense.failed_form = failed_form
+    context = {
+        "synset": synset,
+        "sense": sense,
+        # Briefly highlights the example just saved, which sorting may have moved
+        "saved_pk": saved_pk,
+    }
+    return render(request, "editor/snippets/_sense_item.html", context)
+
+
+@require_POST
+def save_sense_example_htmx(request, synset_pk, example_pk=None):
+    # Adds an example without example_pk, edits one with it. Filtering on the synset
+    # rejects a sense or example from another synset (404), and select_related
+    # brings the synset along, so it needs no query of its own.
+    if example_pk is None:
+        sense = get_object_or_404(
+            Sense.objects.select_related("word", "synset"),
+            pk=request.POST.get("sense_pk"),
+            synset_id=synset_pk,
+        )
+        example = SenseExample(sense=sense)
+    else:
+        example = get_object_or_404(
+            SenseExample.objects.select_related("sense__word", "sense__synset"),
+            pk=example_pk,
+            sense__synset_id=synset_pk,
+        )
+        sense = example.sense
+    synset = sense.synset
+    form = SenseExampleForm(request.POST, instance=example)
+    if not form.is_valid():
+        return _render_sense_item(request, synset, sense, failed_form=form)
+    # A new example always counts as changed. For an edit, saving unchanged text
+    # shouldn't cost a reviewed synset its status.
+    if not form.has_changed():
+        return _render_sense_item(request, synset, sense)
+    form.save()
+    _save_updated_synset(synset)
+    return _render_sense_item(request, synset, sense, saved_pk=example.pk)
+
+
+@require_POST
+def delete_sense_example_htmx(request, synset_pk, example_pk):
+    example = get_object_or_404(
+        SenseExample.objects.select_related("sense__word", "sense__synset"),
+        pk=example_pk,
+        sense__synset_id=synset_pk,
+    )
+    sense = example.sense
+    synset = sense.synset
+    example.delete()
+    _save_updated_synset(synset)
+    return _render_sense_item(request, synset, sense)
 
 
 @require_GET

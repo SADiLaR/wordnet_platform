@@ -880,6 +880,387 @@ class EditorViewTest(TestCase):
             response = self.client.post(invalid_url)
         self.assertEqual(response.status_code, 404)
 
+    def _get_add_sense_example_url(self, synset_obj):
+        return reverse(
+            "editor:add_sense_example_htmx", kwargs={"synset_pk": synset_obj.pk}
+        )
+
+    def _get_edit_sense_example_url(self, synset_obj, example_obj):
+        return reverse(
+            "editor:edit_sense_example_htmx",
+            kwargs={"synset_pk": synset_obj.pk, "example_pk": example_obj.pk},
+        )
+
+    def _get_delete_sense_example_url(self, synset_obj, example_obj):
+        return reverse(
+            "editor:delete_sense_example_htmx",
+            kwargs={"synset_pk": synset_obj.pk, "example_pk": example_obj.pk},
+        )
+
+    def _sense_example_texts(self, sense_obj):
+        # Straight from the database, empty ones included, in creation order
+        return list(
+            SenseExample.objects.filter(sense=sense_obj)
+            .order_by("pk")
+            .values_list("text", flat=True)
+        )
+
+    def test_add_sense_example_htmx_success(self):
+        self.assertEqual(self._sense_example_texts(self.sense_2), [])
+        self.assertEqual(self.synset_c.status, Synset.Status.STUB)
+        # Queries:
+        # fetch sense (with word, synset), scoped to synset
+        # INSERT example
+        # INSERT example history
+        # UPDATE synset (status → draft)
+        # INSERT synset history
+        # fetch non-empty examples (context)
+        with self.assertNumQueries(6):
+            response = self.client.post(
+                self._get_add_sense_example_url(self.synset_c),
+                {"sense_pk": self.sense_2.pk, "text": "Nog 'n toets."},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._sense_example_texts(self.sense_2), ["Nog 'n toets."])
+        # In <q>, so the browser adds the quotation marks and they aren't copied
+        self.assertContains(
+            response,
+            '<q class="text-secondary fst-italic small">Nog \'n toets.</q>',
+            html=True,
+        )
+        # The remove-word prompt in the re-rendered sense now counts the new example
+        self.assertContains(
+            response, "Its <strong>usage example</strong> will also be deleted."
+        )
+        # The new example is highlighted, and nothing else is
+        new_example = SenseExample.objects.get(sense=self.sense_2)
+        self.assertEqual(response.context["saved_pk"], new_example.pk)
+        self.assertContains(response, "just-saved", count=1)
+        self.synset_c.refresh_from_db()
+        self.assertEqual(self.synset_c.status, Synset.Status.DRAFT)
+
+    def test_add_sense_example_htmx_empty_text(self):
+        self.assertEqual(self._sense_example_texts(self.sense_2), [])
+        # Queries:
+        # fetch sense (with word, synset), scoped to synset
+        # fetch non-empty examples (context)
+        with self.assertNumQueries(2):
+            response = self.client.post(
+                self._get_add_sense_example_url(self.synset_c),
+                {"sense_pk": self.sense_2.pk, "text": "   "},
+            )
+        self.assertEqual(response.status_code, 200)
+        failed_form = response.context["sense"].failed_form
+        self.assertTrue(failed_form.errors)
+        # It's the add form, not an edit form
+        self.assertIsNone(failed_form.instance.pk)
+        self.assertContains(response, "is-invalid")
+        self.assertEqual(self._sense_example_texts(self.sense_2), [])
+
+    def test_add_sense_example_htmx_wrong_synset(self):
+        # sense_2 belongs to synset_c, not synset_b
+        self.assertNotEqual(self.sense_2.synset_id, self.synset_b.pk)
+        self.assertEqual(self._sense_example_texts(self.sense_2), [])
+        # Queries:
+        # fetch sense scoped to synset (not found → 404)
+        with self.assertNumQueries(1):
+            response = self.client.post(
+                self._get_add_sense_example_url(self.synset_b),
+                {"sense_pk": self.sense_2.pk, "text": "Nog 'n toets."},
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(self._sense_example_texts(self.sense_2), [])
+
+    def test_edit_sense_example_htmx_success(self):
+        Synset.objects.filter(pk=self.synset_b.pk).update(status=Synset.Status.COMPLETE)
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.COMPLETE)
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+        # Queries:
+        # fetch example (with sense, word, synset), scoped to synset
+        # UPDATE example
+        # INSERT example history
+        # UPDATE synset (status → draft)
+        # INSERT synset history
+        # fetch non-empty examples (context)
+        with self.assertNumQueries(6):
+            response = self.client.post(
+                self._get_edit_sense_example_url(self.synset_b, self.sense_example),
+                {"text": "Hierdie is 'n beter toets."},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.sense_example.refresh_from_db()
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n beter toets.")
+        # The edited example is highlighted, and nothing else is
+        self.assertEqual(response.context["saved_pk"], self.sense_example.pk)
+        self.assertContains(response, "just-saved", count=1)
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
+
+    def test_edit_sense_example_htmx_unchanged(self):
+        Synset.objects.filter(pk=self.synset_b.pk).update(status=Synset.Status.REVIEWED)
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.REVIEWED)
+        # Trailing whitespace is stripped by the form, so this counts as unchanged.
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+        # Queries:
+        # fetch example (with sense, word, synset), scoped to synset
+        # fetch non-empty examples (context)
+        with self.assertNumQueries(2):
+            response = self.client.post(
+                self._get_edit_sense_example_url(self.synset_b, self.sense_example),
+                {"text": "Hierdie is 'n toets.  "},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.sense_example.refresh_from_db()
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+        # Nothing was saved, so nothing is highlighted
+        self.assertNotContains(response, "just-saved")
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.REVIEWED)
+
+    def test_edit_sense_example_htmx_empty_text(self):
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+        # Queries:
+        # fetch example (with sense, word, synset), scoped to synset
+        # fetch non-empty examples (context)
+        with self.assertNumQueries(2):
+            response = self.client.post(
+                self._get_edit_sense_example_url(self.synset_b, self.sense_example),
+                {"text": ""},
+            )
+        self.assertEqual(response.status_code, 200)
+        failed_form = response.context["sense"].failed_form
+        self.assertTrue(failed_form.errors)
+        # It's this example's edit form
+        self.assertEqual(failed_form.instance.pk, self.sense_example.pk)
+        self.assertContains(response, "is-invalid")
+        self.sense_example.refresh_from_db()
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+
+    def test_edit_sense_example_htmx_wrong_synset(self):
+        # sense_example belongs to synset_b (through sense_1), not synset_c
+        self.assertNotEqual(self.sense_example.sense.synset_id, self.synset_c.pk)
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+        # Queries:
+        # fetch example scoped to synset (not found → 404)
+        with self.assertNumQueries(1):
+            response = self.client.post(
+                self._get_edit_sense_example_url(self.synset_c, self.sense_example),
+                {"text": "Gekaap."},
+            )
+        self.assertEqual(response.status_code, 404)
+        self.sense_example.refresh_from_db()
+        self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
+
+    def test_delete_sense_example_htmx_success(self):
+        Synset.objects.filter(pk=self.synset_b.pk).update(status=Synset.Status.COMPLETE)
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.COMPLETE)
+        self.assertTrue(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
+        # Queries:
+        # fetch example (with sense, word, synset), scoped to synset
+        # DELETE example
+        # INSERT example history
+        # UPDATE synset (status → draft)
+        # INSERT synset history
+        # fetch non-empty examples (context)
+        with self.assertNumQueries(6):
+            response = self.client.post(
+                self._get_delete_sense_example_url(self.synset_b, self.sense_example)
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
+
+    def test_delete_sense_example_htmx_wrong_synset(self):
+        # sense_example belongs to synset_b (through sense_1), not synset_c
+        self.assertNotEqual(self.sense_example.sense.synset_id, self.synset_c.pk)
+        self.assertTrue(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
+        # Queries:
+        # fetch example scoped to synset (not found → 404)
+        with self.assertNumQueries(1):
+            response = self.client.post(
+                self._get_delete_sense_example_url(self.synset_c, self.sense_example)
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
+
+    def test_synset_detail_source_examples_readonly(self):
+        # synset_e is copied from synset_d; give the source synset an example
+        source_word = Word.objects.create(
+            text="bron woord", pos=self.pos_verb, language=self.wordnet.language
+        )
+        source_sense = Sense.objects.create(word=source_word, synset=self.synset_d)
+        source_example = SenseExample.objects.create(
+            text="'n Bronvoorbeeld.", sense=source_sense
+        )
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
+        # The assertions below rely on synset_e having no words of its own
+        self.assertFalse(self.synset_e.sense_set.exists())
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # fetch relations (working synset)
+        # fetch relations (source synset)
+        # fetch senses (with words), working synset — none, so no examples query
+        # fetch senses (with words), source synset
+        # fetch non-empty examples (source senses)
+        with self.assertNumQueries(14):
+            response = self.client.get(self._get_synset_detail_url(self.synset_e))
+        self.assertContains(response, "n Bronvoorbeeld.")
+        # synset_e itself has no words, so any edit control would be the source's
+        self.assertNotContains(response, "Add usage example")
+        self.assertNotContains(response, f"del-sense-example-{source_example.pk}")
+        self.assertNotContains(
+            response,
+            reverse(
+                "editor:edit_sense_example_htmx",
+                kwargs={"synset_pk": self.synset_e.pk, "example_pk": source_example.pk},
+            ),
+        )
+
+    def test_synset_detail_hides_empty_examples(self):
+        SenseExample.objects.create(text="", sense=self.sense_1)
+        self.assertEqual(
+            self._sense_example_texts(self.sense_1), [self.sense_example.text, ""]
+        )
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # guess source synset by Princeton ID
+        # fetch relations
+        # fetch senses (with words)
+        # fetch non-empty examples
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(self.synset_b))
+        sense = response.context["senses"][0]
+        self.assertEqual(
+            [example.text for example in sense.senseexample_set.all()],
+            [self.sense_example.text],
+        )
+
+    def test_synset_detail_examples_sorted_alphabetically(self):
+        # Created out of order, so pk order and alphabetical order differ
+        SenseExample.objects.create(text="Wortel.", sense=self.sense_1)
+        SenseExample.objects.create(text="Appel.", sense=self.sense_1)
+        self.assertEqual(
+            self._sense_example_texts(self.sense_1),
+            ["Hierdie is 'n toets.", "Wortel.", "Appel."],
+        )
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # guess source synset by Princeton ID
+        # fetch relations
+        # fetch senses (with words)
+        # fetch non-empty examples
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(self.synset_b))
+        sense = response.context["senses"][0]
+        self.assertEqual(
+            [example.text for example in sense.senseexample_set.all()],
+            ["Appel.", "Hierdie is 'n toets.", "Wortel."],
+        )
+
+    def test_synset_detail_example_forms_from_form_fields(self):
+        # sense_1 is synset_b's only sense, with one example: one edit form, one add
+        self.assertEqual(list(self.synset_b.sense_set.all()), [self.sense_1])
+        self.assertEqual(
+            self._sense_example_texts(self.sense_1), ["Hierdie is 'n toets."]
+        )
+        max_length = SenseExample._meta.get_field("text").max_length
+        # Queries (building the forms adds none):
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # guess source synset by Princeton ID
+        # fetch relations
+        # fetch senses (with words)
+        # fetch non-empty examples
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(self.synset_b))
+        self.assertContains(response, f'maxlength="{max_length}"', count=2)
+        # A page load highlights nothing; only a save does
+        self.assertNotContains(response, "just-saved")
+        # The edit textarea is pre-filled with the saved text. Anchored to the
+        # textarea's tags, because the same text also appears in the <q>.
+        self.assertContains(response, ">Hierdie is &#x27;n toets.</textarea>")
+
+    def test_synset_detail_delete_sense_warns_about_example(self):
+        # sense_1 (synset_b) has one example
+        self.assertEqual(
+            self._sense_example_texts(self.sense_1), ["Hierdie is 'n toets."]
+        )
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # guess source synset by Princeton ID
+        # fetch relations
+        # fetch senses (with words)
+        # fetch non-empty examples
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(self.synset_b))
+        self.assertContains(
+            response, "Its <strong>usage example</strong> will also be deleted."
+        )
+
+    def test_synset_detail_delete_sense_warns_about_examples(self):
+        SenseExample.objects.create(text="'n Tweede toets.", sense=self.sense_1)
+        self.assertEqual(len(self._sense_example_texts(self.sense_1)), 2)
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # guess source synset by Princeton ID
+        # fetch relations
+        # fetch senses (with words)
+        # fetch non-empty examples
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(self.synset_b))
+        self.assertContains(
+            response, "Its <strong>2 usage examples</strong> will also be deleted."
+        )
+
+    def test_synset_detail_delete_sense_no_warning_without_examples(self):
+        # An empty example isn't shown, so it isn't warned about either
+        SenseExample.objects.filter(pk=self.sense_example.pk).update(text="")
+        # The example still exists; only its text is empty
+        self.assertEqual(self._sense_example_texts(self.sense_1), [""])
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 7 concern checks (synset and word concerns)
+        # guess source synset by Princeton ID
+        # fetch relations
+        # fetch senses (with words)
+        # fetch non-empty examples
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(self.synset_b))
+        self.assertContains(response, "Remove this word from the synset?")
+        self.assertNotContains(response, "will also be deleted")
+
+    def test_status_htmx_empty_example_counts_as_missing(self):
+        SenseExample.objects.filter(pk=self.sense_example.pk).update(text="")
+        # The example still exists; only its text is empty
+        self.assertEqual(self._sense_example_texts(self.sense_1), [""])
+        # The status must stay draft, so it has to start as draft
+        self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
+        # Queries:
+        # fetch synset
+        # fetch senses
+        # fetch non-empty examples
+        # fetch words
+        # check for relations
+        with self.assertNumQueries(5):
+            response = self.client.post(
+                self._get_synset_status_htmx_url(self.synset_b),
+                {"new_status": Synset.Status.COMPLETE},
+            )
+        self.assertIn(
+            '"toets woord" has no usage example.', response.context["warnings"]
+        )
+        self.synset_b.refresh_from_db()
+        self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
+
 
 class AssignmentModelTest(TestCase):
     def setUp(self):

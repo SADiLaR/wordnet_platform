@@ -2,4 +2,4 @@
 {% trans "Remove this word from the synset?" as confirm_message %}
 {% trans "Remove" as confirm_label %}
 {% url 'editor:delete_sense_htmx' synset_pk=synset.pk sense_pk=sense.pk as delete_url %}
-{% include "editor/snippets/_confirm_action.html" with confirm_message=confirm_message post_url=delete_url hx_target="closest .senses-section" confirm_label=confirm_label cancel_prefix="del-sense-" cancel_pk=sense.pk %}
+{% include "editor/snippets/_confirm_action.html" with confirm_message=confirm_message post_url=delete_url hx_target="closest .senses-section" hx_swap="outerHTML" confirm_label=confirm_label cancel_prefix="del-sense-" cancel_pk=sense.pk %}

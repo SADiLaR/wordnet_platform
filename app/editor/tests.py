@@ -171,13 +171,13 @@ class EditorViewTest(TestCase):
         )
 
         self.relation_type = RelationType.objects.create(name="hyper")
-        Relation.objects.create(
+        self.rel1 = Relation.objects.create(
             synset_from=self.synset_e,
             synset_to=self.synset_f,
             type=self.relation_type,
         )
 
-        Relation.objects.create(
+        self.rel2 = Relation.objects.create(
             synset_from=self.synset_c,
             synset_to=self.synset_b,
             type=self.relation_type,
@@ -660,6 +660,34 @@ class EditorViewTest(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertIn("error", response.context)
+
+    def test_delete_relation(self):
+        self.assertTrue(Relation.objects.filter(synset_from=self.synset_c).exists())
+        # get synset
+        # get relation
+        # delete relation
+        # create historical relation
+        # update synset status
+        # create historical synset
+        # ... full synset info
+        with self.assertNumQueries(15):
+            response = self.client.post(
+                reverse(
+                    "editor:delete_relation_htmx",
+                    kwargs={"synset_pk": self.synset_c.pk, "rel_pk": self.rel2.pk},
+                )
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Relation.objects.filter(synset_from=self.synset_c).exists())
+
+        # If someone tries again, it should be acceptable as well:
+        response = self.client.post(
+            reverse(
+                "editor:delete_relation_htmx",
+                kwargs={"synset_pk": self.synset_c.pk, "rel_pk": self.rel2.pk},
+            )
+        )
+        self.assertEqual(response.status_code, 200)
 
     def test_clear_htmx(self):
         with self.assertNumQueries(0):

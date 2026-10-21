@@ -14,6 +14,7 @@ from lex.models import (
     Sense,
     SenseExample,
     Synset,
+    SynsetExample,
     Word,
     Wordnet,
 )
@@ -212,6 +213,12 @@ class EditorViewTest(TestCase):
     def _get_synset_definition_url_nonexist(self):
         return reverse("editor:synset_definition", kwargs={"pk": 99999})
 
+    def _get_delete_synset_example_url(self, synset_obj, example_obj):
+        return reverse(
+            "editor:delete_synset_example_htmx",
+            kwargs={"synset_pk": synset_obj.pk, "pk": example_obj.pk},
+        )
+
     def _get_add_relation_form_url(self, synset_obj):
         return reverse("editor:add_relation_form_htmx", kwargs={"pk": synset_obj.pk})
 
@@ -338,13 +345,13 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_synset_detail_existing_no_princeton(self):
-        with self.assertNumQueries(11):
+        with self.assertNumQueries(12):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["synset"], self.synset_a)
 
     def test_synset_detail_existing_with_princeton(self):
-        with self.assertNumQueries(12):
+        with self.assertNumQueries(13):
             response = self.client.get(self._get_synset_detail_url(self.synset_f))
         self.assertEqual(response.status_code, 200)
 
@@ -379,13 +386,13 @@ class EditorViewTest(TestCase):
         self.assertEqual(not_itself, None)
 
     def test_guess_source_synset_view_existing(self):
-        with self.assertNumQueries(14):
+        with self.assertNumQueries(15):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_f))
             self.assertEqual(response.context["source_synset"], self.synset_d)
 
     def test_copied_source_synset(self):
-        with self.assertNumQueries(13):
+        with self.assertNumQueries(14):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
@@ -393,7 +400,7 @@ class EditorViewTest(TestCase):
     def test_link_source_synset(self):
         self.synset_a.refresh_from_db()
         self.assertIsNone(self.synset_a.copied_from)
-        with self.assertNumQueries(17):
+        with self.assertNumQueries(18):
             response = self.client.post(
                 reverse(
                     "editor:link_synset_htmx",
@@ -497,6 +504,24 @@ class EditorViewTest(TestCase):
                 self._get_synset_definition_url(self.synset_a),
             )
         self.assertEqual(response.status_code, 405)
+
+    def test_delete_synset_example_htmx(self):
+        synset_example = SynsetExample.objects.create(
+            synset_id=self.synset_a.pk,
+            text="Test synset example",
+        )
+        # Queries:
+        # fetch synset
+        # fetch synset example
+        # DELETE example
+        # INSERT synset example history
+        # fetch updated synset example
+        with self.assertNumQueries(5):
+            response = self.client.post(
+                self._get_delete_synset_example_url(self.synset_a, synset_example)
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(SynsetExample.objects.filter(pk=synset_example.pk).exists())
 
     def test_suggest_relation_htmx_get_no_type(self):
         # Queries:

@@ -28,7 +28,7 @@
 
         <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
         {% include "editor/snippets/_definition_form.html" %}
-
+        {% include "editor/snippets/_synsetexample.html" with synset=synset %}
         {% include "editor/snippets/_sense_list.html" with senses=senses %}
 
         <div id="relations-section">

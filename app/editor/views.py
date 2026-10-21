@@ -300,7 +300,7 @@ def delete_synset_example_htmx(request, synset_pk, pk):
         # different users/windows, or a retry due to an unreceived response.
         pass
 
-    contex = {"examples": synset.synsetexample_set.all}
+    contex = {"synset": synset}
     return render(
         request,
         "editor/snippets/_synsetexample.html",

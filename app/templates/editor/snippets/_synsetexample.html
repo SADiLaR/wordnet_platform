@@ -1,4 +1,5 @@
 {% load i18n %}
+{% with examples=synset.synsetexample_set.all %}
 {% if examples %}
 <div class="synset-examples">
     <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">
@@ -24,3 +25,4 @@
 {% if error %}<p class="text-danger small mt-1 mb-2">{{ error }}</p>{% endif %}
 </div>
 {% endif %}
+{% endwith %}

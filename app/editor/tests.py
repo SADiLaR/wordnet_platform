@@ -515,7 +515,8 @@ class EditorViewTest(TestCase):
         # fetch synset example
         # DELETE example
         # INSERT synset example history
-        with self.assertNumQueries(4):
+        # fetch updated synset example
+        with self.assertNumQueries(5):
             response = self.client.post(
                 self._get_delete_synset_example_url(self.synset_a, synset_example)
             )

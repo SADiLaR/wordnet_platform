@@ -58,6 +58,21 @@ urlpatterns = [
         name="delete_sense_htmx",
     ),
     path(
+        "synsets/<int:synset_pk>/sense_examples/add/",
+        views.save_sense_example_htmx,
+        name="add_sense_example_htmx",
+    ),
+    path(
+        "synsets/<int:synset_pk>/sense_examples/<int:example_pk>/edit/",
+        views.save_sense_example_htmx,
+        name="edit_sense_example_htmx",
+    ),
+    path(
+        "synsets/<int:synset_pk>/sense_examples/<int:example_pk>/delete/",
+        views.delete_sense_example_htmx,
+        name="delete_sense_example_htmx",
+    ),
+    path(
         "synsets/<int:pk>/relations/add/",
         views.add_relation_htmx,
         name="add_relation_htmx",

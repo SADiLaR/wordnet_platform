@@ -1,0 +1,51 @@
+{% load i18n %}
+{% comment %}
+  Add form when `example` is unset, edit form otherwise.
+  Collapse toggles target a class, not an id: the edit form shares ex-<pk> with the
+  example's text, so one toggle swaps the text for the form. `form` is always set;
+  after a validation error it is the failed form, which is then open, with errors.
+{% endcomment %}
+{% if example %}
+  {% url 'editor:edit_sense_example_htmx' synset_pk=synset.pk example_pk=example.pk as post_url %}
+{% else %}
+  {% url 'editor:add_sense_example_htmx' synset_pk=synset.pk as post_url %}
+{% endif %}
+{% blocktrans asvar textarea_label with word=sense.word.text %}Example for “{{ word }}”{% endblocktrans %}
+<form
+    class="collapse{% if form.errors %} show{% endif %} mt-1 mb-2
+           {% if example %}ex-{{ example.pk }}{% else %}add-ex-{{ sense.pk }}{% endif %}"
+    hx-post="{{ post_url }}"
+    hx-target="closest .sense-item"
+    hx-swap="outerHTML"
+>
+  {% if not example %}
+    <input
+        type="hidden"
+        name="sense_pk"
+        value="{{ sense.pk }}"
+    >
+  {% endif %}
+  <textarea
+      class="form-control form-control-sm{% if form.text.errors %} is-invalid{% endif %}"
+      name="{{ form.text.html_name }}"
+      rows="2"
+      maxlength="{{ form.text.field.max_length }}"
+      aria-label="{{ textarea_label }}"
+      data-unsaved-track
+  >{{ form.text.value|default:"" }}</textarea>
+  {% for error in form.text.errors %}
+    <div class="invalid-feedback d-block">{{ error }}</div>
+  {% endfor %}
+  <div class="mt-1">
+    <button
+        type="submit"
+        class="btn btn-sm btn-primary py-0"
+    >{% trans "Save" %}</button>
+    <button
+        type="reset"
+        class="btn btn-sm btn-link text-secondary py-0"
+        data-bs-toggle="collapse"
+        data-bs-target=".{% if example %}ex-{{ example.pk }}{% else %}add-ex-{{ sense.pk }}{% endif %}"
+    >{% trans "Cancel" %}</button>
+  </div>
+</form>

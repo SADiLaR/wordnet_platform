@@ -4,22 +4,7 @@
 {% if senses %}
   <ul class="list-unstyled mb-3">
     {% for sense in senses %}
-      <li class="sense-item hover-reveal-delete py-2 border-bottom">
-        <span class="fw-medium">{{ sense.word.text }}</span>{% if not readonly %}
-        <button
-            type="button"
-            class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"
-            aria-label="{% trans 'Delete word' %}"
-            data-bs-toggle="collapse"
-            data-bs-target="#del-sense-{{ sense.pk }}"
-        >×</button>{% endif %}
-        {% for example in sense.senseexample_set.all %}
-          <div class="text-secondary fst-italic small mt-1">"{{ example.text }}"</div>
-        {% endfor %}
-        {% if not readonly %}
-        <div class="collapse" id="del-sense-{{ sense.pk }}">{% include "editor/snippets/_delete_sense_confirm.html" with sense=sense %}</div>
-        {% endif %}
-      </li>
+      {% include "editor/snippets/_sense_item.html" %}
     {% endfor %}
   </ul>
 {% else %}

@@ -119,19 +119,37 @@ code {
 }
 
 /* ── Add / delete buttons ── */
-.btn-delete {
+.btn-delete,
+.btn-edit {
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-
-.hover-reveal-delete:hover .btn-delete,
+/* Child selector, so hovering a word doesn't also reveal its examples' buttons. */
+.hover-reveal-delete:hover > .btn-delete,
+.hover-reveal-delete:hover > .btn-edit,
 .btn-delete:focus,
+.btn-edit:focus,
 .btn-delete[aria-expanded="true"] {
   opacity: 1;
 }
 
+/* ── Just-saved highlight ── */
+/* Runs once, when HTMX swaps in the re-rendered sense with this class on one example.
+   Holds the yellow for the first 40% (0.6s), so it's noticed, then fades. */
+@keyframes saved-highlight {
+  0%,
+  40% {
+    background-color: var(--bs-warning-bg-subtle);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
 
+.just-saved {
+  animation: saved-highlight 1.5s ease-in;
+}
 
 .btn-add {
   color: rgb(var(--draft-color));

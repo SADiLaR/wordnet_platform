@@ -1,7 +1,9 @@
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from django.utils.html import escape
 
 from editor.filters import SynsetFilter
 from editor.models import Assignment
@@ -390,20 +392,91 @@ class EditorViewTest(TestCase):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
 
+    def test_synset_detail_no_relations(self):
+        # synset_a has no relations and no source synset (no Princeton ID, not copied)
+        self.assertFalse(
+            Relation.objects.filter(
+                Q(synset_from=self.synset_a) | Q(synset_to=self.synset_a)
+            ).exists()
+        )
+        self.assertIsNone(self.synset_a.copied_from_id)
+        self.assertIsNone(self.synset_a.princeton_id)
+        # Queries:
+        # fetch synset_a (with pos, wordnet, copied_from__wordnet)
+        # 8 concern exists() checks (_synset_context)
+        # relations of synset_a (_synset_context)
+        # senses of synset_a (none, so no example prefetch)
+        # (no source synset: nothing linked, and no Princeton ID to guess from)
+        with self.assertNumQueries(11):
+            response = self.client.get(self._get_synset_detail_url(self.synset_a))
+        self.assertContains(response, "No relations.", count=1)
+        # The working card can still add one
+        self.assertContains(
+            response,
+            reverse("editor:add_relation_form_htmx", kwargs={"pk": self.synset_a.pk}),
+        )
+
+    def test_synset_detail_source_card_readonly(self):
+        # Both cards share _synset_card_body.html; only the working card is editable
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
+        # synset_e has a relation (rel1); synset_d, its source, has none
+        self.assertTrue(Relation.objects.filter(synset_from=self.synset_e).exists())
+        self.assertFalse(
+            Relation.objects.filter(
+                Q(synset_from=self.synset_d) | Q(synset_to=self.synset_d)
+            ).exists()
+        )
+        # Queries:
+        # fetch synset_e (with pos, wordnet, copied_from__wordnet)
+        # 8 concern exists() checks (_synset_context)
+        # relations of synset_e (_synset_context)
+        # relations of synset_d (_source_synset_context)
+        # senses of synset_e (none, so no example prefetch)
+        # senses of synset_d (none, so no example prefetch)
+        with self.assertNumQueries(13):
+            with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+                response = self.client.get(self._get_synset_detail_url(self.synset_e))
+        self.assertContains(response, escape(self.synset_d.definition))
+        # One definition form: the working card's
+        self.assertContains(response, 'name="definition"', count=1)
+        # Only the source card has no relations to show
+        self.assertContains(response, "No relations.", count=1)
+        # No word search or relation form for the source synset
+        for url_name in ("search_words_htmx", "add_relation_form_htmx"):
+            self.assertNotContains(
+                response, reverse(f"editor:{url_name}", kwargs={"pk": self.synset_d.pk})
+            )
+            self.assertContains(
+                response, reverse(f"editor:{url_name}", kwargs={"pk": self.synset_e.pk})
+            )
+
     def test_link_source_synset(self):
         self.synset_a.refresh_from_db()
         self.assertIsNone(self.synset_a.copied_from)
-        with self.assertNumQueries(17):
-            response = self.client.post(
-                reverse(
-                    "editor:link_synset_htmx",
-                    kwargs={"pk": self.synset_a.pk},
-                ),
-                {"target_pk": self.synset_f.pk},
-            )
-            self.assertEqual(response.status_code, 200)
+        # The target is in the source wordnet, as a real source synset would be
+        self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
+        # Queries:
+        # fetch synset_a
+        # fetch synset_d (target, with wordnet)
+        # update synset_a
+        # insert history record
+        # relations of synset_d (_source_synset_context)
+        # senses of synset_d (none, so no example prefetch)
+        with self.assertNumQueries(6):
+            with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+                response = self.client.post(
+                    reverse(
+                        "editor:link_synset_htmx",
+                        kwargs={"pk": self.synset_a.pk},
+                    ),
+                    {"target_pk": self.synset_d.pk},
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_source_synset.html")
+        self.assertTemplateNotUsed(response, "editor/synset_detail.html")
+        self.assertEqual(response.context["source_synset"], self.synset_d)
         self.synset_a.refresh_from_db()
-        self.assertEqual(self.synset_a.copied_from_id, self.synset_f.pk)
+        self.assertEqual(self.synset_a.copied_from_id, self.synset_d.pk)
 
     def test_status_htmx_get(self):
         with self.assertNumQueries(1):
@@ -482,6 +555,27 @@ class EditorViewTest(TestCase):
         self.synset_a.refresh_from_db()
         self.assertEqual(self.synset_a.definition, new_def)
         self.assertEqual(self.synset_a.status, Synset.Status.DRAFT)
+
+    def test_definition_post_invalid(self):
+        old_def = self.synset_e.definition
+        self.assertTrue(old_def)
+        # Queries (the same as loading the page):
+        # fetch synset_e (with pos, wordnet, copied_from__wordnet)
+        # 8 concern exists() checks (_synset_context)
+        # relations of synset_e (_synset_context)
+        # relations of synset_d (_source_synset_context)
+        # senses of synset_e (none, so no example prefetch)
+        # senses of synset_d (none, so no example prefetch)
+        with self.assertNumQueries(13):
+            response = self.client.post(
+                self._get_synset_definition_url(self.synset_e),
+                {"definition": ""},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["definition_form"].errors)
+        self.assertEqual(response.context["source_synset"], self.synset_d)
+        self.synset_e.refresh_from_db()
+        self.assertEqual(self.synset_e.definition, old_def)
 
     def test_definition_post_non_existing(self):
         with self.assertNumQueries(1):
@@ -648,8 +742,7 @@ class EditorViewTest(TestCase):
         # fetch rel_type
         # circular exists() → True
         # relations (_synset_context, synset reused)
-        # source synset lookup (_synset_context)
-        with self.assertNumQueries(14):
+        with self.assertNumQueries(13):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_b),
                 {
@@ -662,7 +755,13 @@ class EditorViewTest(TestCase):
         self.assertIn("error", response.context)
 
     def test_delete_relation(self):
-        self.assertTrue(Relation.objects.filter(synset_from=self.synset_c).exists())
+        # rel2 is synset_c's only relation, in either direction
+        self.assertQuerySetEqual(
+            Relation.objects.filter(
+                Q(synset_from=self.synset_c) | Q(synset_to=self.synset_c)
+            ),
+            [self.rel2],
+        )
         # get synset
         # get relation
         # delete relation
@@ -679,6 +778,10 @@ class EditorViewTest(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Relation.objects.filter(synset_from=self.synset_c).exists())
+        # The last relation is gone, so the re-rendered section says so
+        self.assertContains(response, "No relations.", count=1)
+        # The response brings its own wrapper, which replaces the old one (outerHTML)
+        self.assertContains(response, 'class="relations-section"', count=1)
 
         # If someone tries again, it should be acceptable as well:
         response = self.client.post(
@@ -1096,6 +1199,11 @@ class EditorViewTest(TestCase):
         source_example = SenseExample.objects.create(
             text="'n Bronvoorbeeld.", sense=source_sense
         )
+        # Left over from the old tool; the source card must hide it, like the working card
+        SenseExample.objects.create(text="", sense=source_sense)
+        self.assertEqual(
+            self._sense_example_texts(source_sense), ["'n Bronvoorbeeld.", ""]
+        )
         self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
         # The assertions below rely on synset_e having no words of its own
         self.assertFalse(self.synset_e.sense_set.exists())
@@ -1110,6 +1218,11 @@ class EditorViewTest(TestCase):
         with self.assertNumQueries(14):
             response = self.client.get(self._get_synset_detail_url(self.synset_e))
         self.assertContains(response, "n Bronvoorbeeld.")
+        (shown_sense,) = response.context["source_synset_senses"]
+        self.assertEqual(
+            [example.text for example in shown_sense.senseexample_set.all()],
+            ["'n Bronvoorbeeld."],
+        )
         # synset_e itself has no words, so any edit control would be the source's
         self.assertNotContains(response, "Add usage example")
         self.assertNotContains(response, f"del-sense-example-{source_example.pk}")

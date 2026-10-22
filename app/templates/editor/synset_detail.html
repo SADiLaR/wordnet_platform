@@ -20,23 +20,7 @@
 <div class="row g-3">
 
   <div class="col-md-6">
-    <div class="card border-primary mb-4">
-      <div class="card-header bg-primary-subtle">
-        <h2 class="h6 mb-0">{{ synset.wordnet }} {% trans "synset" %}</h2>
-      </div> {# TODO: improve for translation #}
-      <div class="card-body">
-
-        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
-        {% include "editor/snippets/_definition_form.html" %}
-
-        {% include "editor/snippets/_sense_list.html" with senses=senses %}
-
-        <div id="relations-section">
-            {% include "editor/snippets/_relations.html" %}
-        </div>
-
-      </div>
-    </div>
+    {% include "editor/snippets/_working_synset.html" %}
     {# QA Warnings #}
     <div class="card border-danger">
         <div class="card-header bg-danger-subtle">
@@ -58,57 +42,7 @@
     </div>
   </div>
   <div class="col-md-6">
-    <div
-        id="source-synset"
-        class="card {% if synset.copied_from %}border-primary{% else %}border-secondary-subtle{% endif %}"
-    >
-      {% if source_synset %}
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
-        {% if synset.copied_from %}
-          <span class="text-body-secondary small">{{ source_synset.wordnet }}</span>
-        {% else %}
-          <span class="badge bg-secondary">{% trans "Suggested" %}</span>
-        {% endif %}
-      </div>
-      <div class="card-body">
-
-        {# TODO: review choice of uppercase #}
-        <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
-        <p class="mb-3">{{ source_synset.definition }}</p>
-
-        {% include "editor/snippets/_sense_list.html" with senses=source_synset_senses readonly=True %}
-
-        {% if source_relations %}
-          {% include "editor/snippets/_relations.html" with relations=source_relations readonly=True %}
-        {% endif %}
-
-        {% if not synset.copied_from %}
-          <form
-              hx-post="{% url 'editor:link_synset_htmx' pk=synset.pk %}"
-              hx-target="#source-synset"
-              hx-select="#source-synset"
-              hx-swap="outerHTML"
-          >
-              <input type="hidden" name="target_pk" value="{{ source_synset.pk}}">
-              <button class="btn btn-sm btn-outline-secondary">{% trans "Link as source" %}</button>
-          </form>
-        {% endif %}
-
-      </div>
-      {% else %}
-      <div class="card-header"><h2 class="h6 mb-0">{% trans "Source synset" %}</h2></div>
-      <div class="card-body text-center py-4">
-        <p class="text-secondary mb-3">{% trans "No source synset linked." %}</p>
-        <button
-            class="btn btn-sm btn-outline-secondary"
-            hx-get="{% url 'editor:link_synset_form_htmx' pk=synset.pk %}"
-            hx-target="next .synset-form"
-        >{% trans "Search for source" %}</button>
-        <div class="synset-form"></div>
-      </div>
-      {% endif %}
-    </div>
+    {% include "editor/snippets/_source_synset.html" %}
   </div>
 
 </div>

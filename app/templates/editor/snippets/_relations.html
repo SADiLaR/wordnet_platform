@@ -15,6 +15,7 @@ Each relation row is its own <pre> so that .relation-form divs can sit
 between rows without being inside the <pre> element.
 {% endcomment %}
 
+<div class="relations-section">
 <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Relations" %}</h3>
 {% if error %}<div class="alert alert-danger py-1 px-2 small mt-1" role="alert">{{ error }}</div>{% endif %}
 {% if relations.outgoing %}
@@ -62,6 +63,9 @@ between rows without being inside the <pre> element.
     </div>
   {% endfor %}
 {% endif %}
+{% if not relations.outgoing and not relations.incoming %}
+  <p class="text-secondary mb-3">{% trans "No relations." %}</p>
+{% endif %}
 {% if not readonly %}
 <button type="button"
         class="btn btn-sm btn-add mt-2"
@@ -71,3 +75,4 @@ between rows without being inside the <pre> element.
 >+ {% trans "Add relation" %}</button>
 <div class="relation-form"></div>
 {% endif %}
+</div>

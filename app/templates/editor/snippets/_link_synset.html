@@ -1,9 +1,8 @@
 <form
       hx-post="{% url 'editor:link_synset_htmx' pk=synset.pk %}"
       hx-target="#source-synset"
-      hx-select="#source-synset"
       hx-swap="outerHTML"
-      hx-disinherit="hx-select hx-swap"
+      hx-disinherit="hx-swap"
 >
     {% include "editor/snippets/_synset_search_bar.html" with wordnet_id=source_wordnet %}
 </form>

@@ -1,0 +1,10 @@
+{% load i18n %}
+<div class="card border-primary mb-4">
+  <div class="card-header bg-primary-subtle">
+    {# TODO: improve for translation #}
+    <h2 class="h6 mb-0">{{ synset.wordnet }} {% trans "synset" %}</h2>
+  </div>
+  <div class="card-body">
+    {% include "editor/snippets/_synset_card_body.html" %}
+  </div>
+</div>

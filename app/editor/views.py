@@ -133,14 +133,18 @@ def _build_relations(pk):
     return {direction: dict(groups) for direction, groups in relations.items()}
 
 
+def _synsets_for_detail_page():
+    # Synsets, with the related objects the detail page displays (part of speech,
+    # wordnet, and the linked source synset with its wordnet) fetched in the same
+    # query. Use it to load a synset that will be rendered on that page.
+    return Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet")
+
+
 def _synset_context(pk=None, synset=None):
     if synset is None and pk is None:
         raise ValueError("Either pk or synset must be provided")
     if synset is None:
-        synset = get_object_or_404(
-            Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet"),
-            pk=pk,
-        )
+        synset = get_object_or_404(_synsets_for_detail_page(), pk=pk)
     if not pk:
         pk = synset.pk
 
@@ -156,31 +160,40 @@ def _synset_context(pk=None, synset=None):
 
     senses = _senses(synset)
 
-    if synset.copied_from_id:
-        source_synset = synset.copied_from
-    else:
-        source_synset = _guess_source_synset(synset)
-
-    source_synset_senses = []
-    if source_synset:
-        source_synset_senses = _senses(source_synset)
-
     context = {
         "synset": synset,
         "senses": senses,
         "relations": _build_relations(pk),
-        "source_synset": source_synset,
-        "source_synset_senses": source_synset_senses,
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
         "concerns": concerns,
     }
     return context
 
 
+def _source_synset_context(synset):
+    """Context for the source synset card: the linked source, or else a guess."""
+    if synset.copied_from_id:
+        source_synset = synset.copied_from
+    else:
+        source_synset = _guess_source_synset(synset)
+
+    source_synset_senses = []
+    source_relations = None
+    if source_synset:
+        source_synset_senses = _senses(source_synset)
+        source_relations = _build_relations(source_synset.pk)
+
+    return {
+        "synset": synset,
+        "source_synset": source_synset,
+        "source_synset_senses": source_synset_senses,
+        "source_relations": source_relations,
+    }
+
+
 def synset_detail(request, pk):
     context = _synset_context(pk)
-    if src_synset := context["source_synset"]:
-        context["source_relations"] = _build_relations(src_synset.pk)
+    context.update(_source_synset_context(context["synset"]))
     return render(
         request,
         "editor/synset_detail.html",
@@ -246,7 +259,8 @@ def synset_status_htmx(request, pk):
 
 
 def synset_definition(request, pk):
-    synset = get_object_or_404(Synset, pk=pk)
+    # An invalid form re-renders the whole detail page
+    synset = get_object_or_404(_synsets_for_detail_page(), pk=pk)
 
     if request.method == "POST":
         form = DefinitionForm(request.POST)
@@ -257,7 +271,8 @@ def synset_definition(request, pk):
 
             return redirect("editor:synset_detail", pk=pk)
         else:
-            context = _synset_context(synset)
+            context = _synset_context(synset=synset)
+            context.update(_source_synset_context(synset))
             context["definition_form"] = form
             return render(request, "editor/synset_detail.html", context)
 
@@ -533,10 +548,16 @@ def link_synset_form_htmx(request, pk):
 def link_synset_htmx(request, pk):
     synset = get_object_or_404(Synset, pk=pk)
     target_synset_pk = request.POST.get("target_pk")
-    target_synset = get_object_or_404(Synset, pk=target_synset_pk)
+    target_synset = get_object_or_404(
+        Synset.objects.select_related("wordnet"), pk=target_synset_pk
+    )
     synset.copied_from = target_synset
     _save_updated_synset(synset, updated_fields=["copied_from"])
-    return synset_detail(request, pk)
+    return render(
+        request,
+        "editor/snippets/_source_synset.html",
+        _source_synset_context(synset),
+    )
 
 
 @require_GET

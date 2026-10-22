@@ -1,0 +1,52 @@
+{% load i18n %}
+{% comment %}
+  The source synset card. Here `synset` is the working synset, the one the page is
+  about, not the synset this card shows. That one is `source_synset`: either the linked
+  source (`synset.copied_from`), or a suggested one.
+{% endcomment %}
+<div
+    id="source-synset"
+    class="card {% if synset.copied_from %}border-primary{% else %}border-secondary-subtle{% endif %}"
+>
+  {% if source_synset %}
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
+    {% if synset.copied_from %}
+      <span class="text-body-secondary small">{{ source_synset.wordnet }}</span>
+    {% else %}
+      <span class="badge bg-secondary">{% trans "Suggested" %}</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {# Inside the include, synset is the source synset; outside it, the working synset #}
+    {% include "editor/snippets/_synset_card_body.html" with synset=source_synset senses=source_synset_senses relations=source_relations readonly=True %}
+
+    {% if not synset.copied_from %}
+      <form
+          hx-post="{% url 'editor:link_synset_htmx' pk=synset.pk %}"
+          hx-target="#source-synset"
+          hx-swap="outerHTML"
+      >
+          <input
+              type="hidden"
+              name="target_pk"
+              value="{{ source_synset.pk }}"
+          >
+          <button class="btn btn-sm btn-outline-secondary">{% trans "Link as source" %}</button>
+      </form>
+    {% endif %}
+
+  </div>
+  {% else %}
+  <div class="card-header"><h2 class="h6 mb-0">{% trans "Source synset" %}</h2></div>
+  <div class="card-body text-center py-4">
+    <p class="text-secondary mb-3">{% trans "No source synset linked." %}</p>
+    <button
+        class="btn btn-sm btn-outline-secondary"
+        hx-get="{% url 'editor:link_synset_form_htmx' pk=synset.pk %}"
+        hx-target="next .synset-form"
+    >{% trans "Search for source" %}</button>
+    <div class="synset-form"></div>
+  </div>
+  {% endif %}
+</div>

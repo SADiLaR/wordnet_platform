@@ -402,7 +402,7 @@ class EditorViewTest(TestCase):
         self.assertIsNone(self.synset_a.copied_from_id)
         self.assertIsNone(self.synset_a.princeton_id)
         # Queries:
-        # fetch synset_a (with pos, wordnet, copied_from__wordnet)
+        # fetch synset_a (with pos, wordnet, language, and the same for copied_from)
         # 8 concern exists() checks (_synset_context)
         # relations of synset_a (_synset_context)
         # senses of synset_a (none, so no example prefetch)
@@ -427,7 +427,7 @@ class EditorViewTest(TestCase):
             ).exists()
         )
         # Queries:
-        # fetch synset_e (with pos, wordnet, copied_from__wordnet)
+        # fetch synset_e (with pos, wordnet, language, and the same for copied_from)
         # 8 concern exists() checks (_synset_context)
         # relations of synset_e (_synset_context)
         # relations of synset_d (_source_synset_context)
@@ -450,33 +450,129 @@ class EditorViewTest(TestCase):
                 response, reverse(f"editor:{url_name}", kwargs={"pk": self.synset_e.pk})
             )
 
+    def _post_link_synset(self, synset_obj, target_pk):
+        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+            return self.client.post(
+                reverse("editor:link_synset_htmx", kwargs={"pk": synset_obj.pk}),
+                {"target_pk": target_pk},
+            )
+
     def test_link_source_synset(self):
         self.synset_a.refresh_from_db()
         self.assertIsNone(self.synset_a.copied_from)
+        self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # The target is in the source wordnet, as a real source synset would be
         self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
+        # synset_a is a noun, synset_d a verb. The source wordnet gets its own
+        # language, so the warning can name both.
+        self.assertNotEqual(self.synset_a.pos_id, self.synset_d.pos_id)
+        english = Language.objects.create(iso_code="eng", name="English")
+        Wordnet.objects.filter(pk=self.wordnet_2.pk).update(language=english)
         # Queries:
-        # fetch synset_a
-        # fetch synset_d (target, with wordnet)
+        # fetch synset_a (with pos, wordnet__language)
+        # fetch synset_d (target, with pos, wordnet__language)
         # update synset_a
         # insert history record
         # relations of synset_d (_source_synset_context)
         # senses of synset_d (none, so no example prefetch)
         with self.assertNumQueries(6):
-            with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
-                response = self.client.post(
-                    reverse(
-                        "editor:link_synset_htmx",
-                        kwargs={"pk": self.synset_a.pk},
-                    ),
-                    {"target_pk": self.synset_d.pk},
-                )
+            response = self._post_link_synset(self.synset_a, self.synset_d.pk)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_source_synset.html")
         self.assertTemplateNotUsed(response, "editor/synset_detail.html")
         self.assertEqual(response.context["source_synset"], self.synset_d)
+        # A different part of speech warns, but doesn't block the link
+        self.assertContains(
+            response,
+            "Different parts of speech: Afrikaans <strong>(noun)</strong> "
+            "vs English <strong>(verb)</strong>.",
+        )
         self.synset_a.refresh_from_db()
         self.assertEqual(self.synset_a.copied_from_id, self.synset_d.pk)
+        # Linking isn't a change to the synset's content
+        self.assertEqual(self.synset_a.status, Synset.Status.STUB)
+
+    def test_link_source_synset_same_pos(self):
+        noun_source = Synset.objects.create(
+            definition="'n Selfstandige naamwoord in die tweede wordnet",
+            wordnet=self.wordnet_2,
+            pos=self.pos_noun,
+        )
+        self.assertEqual(self.synset_a.pos_id, noun_source.pos_id)
+        # Queries:
+        # fetch synset_a (with pos, wordnet__language)
+        # fetch noun_source (target, with pos, wordnet__language)
+        # update synset_a
+        # insert history record
+        # relations of noun_source (_source_synset_context)
+        # senses of noun_source (none, so no example prefetch)
+        with self.assertNumQueries(6):
+            response = self._post_link_synset(self.synset_a, noun_source.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Different parts of speech")
+
+    def test_link_source_synset_not_in_source_wordnet(self):
+        # The security test: synset_c is in the working wordnet, not the source one
+        self.assertNotEqual(self.synset_c.wordnet_id, self.wordnet_2.pk)
+        self.assertIsNone(self.synset_a.copied_from_id)
+        # Queries:
+        # fetch synset_a (with pos, wordnet__language)
+        # fetch synset_c (target, filtered on the source wordnet: no match)
+        with self.assertNumQueries(2):
+            response = self._post_link_synset(self.synset_a, self.synset_c.pk)
+        self.assertEqual(response.status_code, 404)
+        self.synset_a.refresh_from_db()
+        self.assertIsNone(self.synset_a.copied_from_id)
+
+    def test_link_source_synset_itself(self):
+        # synset_d is in the source wordnet, so only the exclude() stops this
+        self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
+        self.assertIsNone(self.synset_d.copied_from_id)
+        # Queries:
+        # fetch synset_d (with pos, wordnet__language)
+        # fetch synset_d as target (excluded: no match)
+        with self.assertNumQueries(2):
+            response = self._post_link_synset(self.synset_d, self.synset_d.pk)
+        self.assertEqual(response.status_code, 404)
+        self.synset_d.refresh_from_db()
+        self.assertIsNone(self.synset_d.copied_from_id)
+
+    def test_link_source_synset_already_linked(self):
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
+        history_count = self.synset_e.history.count()
+        # Queries:
+        # fetch synset_e (with pos, wordnet__language)
+        # fetch synset_d (target, with pos, wordnet__language)
+        # (no update or history record: nothing changed)
+        # relations of synset_d (_source_synset_context)
+        # senses of synset_d (none, so no example prefetch)
+        # Only this count checks that the card reuses the fetched target, rather than
+        # loading synset_e's source, its wordnet, language and POS again
+        with self.assertNumQueries(4):
+            response = self._post_link_synset(self.synset_e, self.synset_d.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["source_synset"], self.synset_d)
+        # Every save adds a history record, so an unchanged count means no save
+        self.assertEqual(self.synset_e.history.count(), history_count)
+
+    def test_synset_detail_in_source_wordnet(self):
+        self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
+        # synset_d has a Princeton ID, so without the check it would look for a guess
+        self.assertTrue(self.synset_d.princeton_id)
+        # Queries:
+        # fetch synset_d (with pos, wordnet, language, and the same for copied_from)
+        # 8 concern exists() checks (_synset_context)
+        # relations of synset_d (_synset_context)
+        # senses of synset_d (none, so no example prefetch)
+        # (no source card: no guess, no source relations or senses)
+        with self.assertNumQueries(11):
+            with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+                response = self.client.get(self._get_synset_detail_url(self.synset_d))
+        self.assertTemplateNotUsed(response, "editor/snippets/_source_synset.html")
+        self.assertNotContains(response, 'id="source-synset"')
+        # The source synset context returned early: no source synset was looked up
+        self.assertTrue(response.context["in_source_wordnet"])
+        self.assertNotIn("source_synset", response.context)
 
     def test_status_htmx_get(self):
         with self.assertNumQueries(1):
@@ -560,7 +656,7 @@ class EditorViewTest(TestCase):
         old_def = self.synset_e.definition
         self.assertTrue(old_def)
         # Queries (the same as loading the page):
-        # fetch synset_e (with pos, wordnet, copied_from__wordnet)
+        # fetch synset_e (with pos, wordnet, language, and the same for copied_from)
         # 8 concern exists() checks (_synset_context)
         # relations of synset_e (_synset_context)
         # relations of synset_d (_source_synset_context)

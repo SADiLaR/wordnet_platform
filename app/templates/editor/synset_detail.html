@@ -41,9 +41,11 @@
         </div>
     </div>
   </div>
-  <div class="col-md-6">
-    {% include "editor/snippets/_source_synset.html" %}
-  </div>
+  {% if not in_source_wordnet %}
+    <div class="col-md-6">
+      {% include "editor/snippets/_source_synset.html" %}
+    </div>
+  {% endif %}
 
 </div>
 

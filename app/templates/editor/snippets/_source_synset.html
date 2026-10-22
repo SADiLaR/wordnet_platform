@@ -18,6 +18,26 @@
     {% endif %}
   </div>
   <div class="card-body">
+    {% comment %}
+      A warning, not an error: many English adjectives are verbs in Bantu languages
+      ("be hungry"), so a source with another part of speech may be right, depending
+      on the approach of the wordnet development project.
+    {% endcomment %}
+    {% if source_synset.pos_id != synset.pos_id %}
+      <div
+          class="alert alert-warning py-1 px-2 small"
+          role="status"
+      >
+        {% with language=synset.wordnet.language.name pos=synset.pos %}
+        {% with source_language=source_synset.wordnet.language.name source_pos=source_synset.pos %}
+          {% blocktrans trimmed %}
+            Different parts of speech: {{ language }} <strong>({{ pos }})</strong>
+            vs {{ source_language }} <strong>({{ source_pos }})</strong>.
+          {% endblocktrans %}
+        {% endwith %}
+        {% endwith %}
+      </div>
+    {% endif %}
     {# Inside the include, synset is the source synset; outside it, the working synset #}
     {% include "editor/snippets/_synset_card_body.html" with synset=source_synset senses=source_synset_senses relations=source_relations readonly=True %}
 

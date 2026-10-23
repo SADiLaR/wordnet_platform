@@ -42,7 +42,8 @@ def _guess_source_synset(synset):
     guessed_id = _guess_princeton_id(synset.princeton_id)
     if guessed_id:
         source_synset = (
-            Synset.objects.filter(
+            Synset.objects.select_related("pos", "wordnet__language")
+            .filter(
                 princeton_id=guessed_id,
                 wordnet_id=settings.SOURCE_WORDNET_ID,  # TODO: make source wordnet configurable
             )
@@ -135,9 +136,14 @@ def _build_relations(pk):
 
 def _synsets_for_detail_page():
     # Synsets, with the related objects the detail page displays (part of speech,
-    # wordnet, and the linked source synset with its wordnet) fetched in the same
-    # query. Use it to load a synset that will be rendered on that page.
-    return Synset.objects.select_related("pos", "wordnet", "copied_from__wordnet")
+    # wordnet and its language, and the same for the linked source synset) fetched
+    # in the same query. Use it to load a synset that will be rendered on that page.
+    return Synset.objects.select_related(
+        "pos",
+        "wordnet__language",
+        "copied_from__pos",
+        "copied_from__wordnet__language",
+    )
 
 
 def _synset_context(pk=None, synset=None):
@@ -172,6 +178,10 @@ def _synset_context(pk=None, synset=None):
 
 def _source_synset_context(synset):
     """Context for the source synset card: the linked source, or else a guess."""
+    # Synsets in the source wordnet have no source, so the page leaves the card out
+    if synset.wordnet_id == settings.SOURCE_WORDNET_ID:
+        return {"synset": synset, "in_source_wordnet": True}
+
     if synset.copied_from_id:
         source_synset = synset.copied_from
     else:
@@ -185,6 +195,7 @@ def _source_synset_context(synset):
 
     return {
         "synset": synset,
+        "in_source_wordnet": False,
         "source_synset": source_synset,
         "source_synset_senses": source_synset_senses,
         "source_relations": source_relations,
@@ -546,13 +557,25 @@ def link_synset_form_htmx(request, pk):
 
 @require_POST
 def link_synset_htmx(request, pk):
-    synset = get_object_or_404(Synset, pk=pk)
-    target_synset_pk = request.POST.get("target_pk")
-    target_synset = get_object_or_404(
-        Synset.objects.select_related("wordnet"), pk=target_synset_pk
+    # Linking doesn't change the status: the link isn't part of the synset's content.
+    # The card's POS warning names both synsets' languages and parts of speech.
+    synset = get_object_or_404(
+        Synset.objects.select_related("pos", "wordnet__language"), pk=pk
     )
+    # Only a synset in the source wordnet can be linked, and never the synset
+    # itself. Anything else is a 404, as if the target didn't exist.
+    target_synset = get_object_or_404(
+        Synset.objects.select_related("pos", "wordnet__language")
+        .filter(wordnet_id=settings.SOURCE_WORDNET_ID)
+        .exclude(pk=synset.pk),
+        pk=request.POST.get("target_pk"),
+    )
+    # Linking the synset that's already linked saves nothing. Assigning it anyway
+    # gives the card the target's wordnet, language and POS without another query.
+    changed = synset.copied_from_id != target_synset.pk
     synset.copied_from = target_synset
-    _save_updated_synset(synset, updated_fields=["copied_from"])
+    if changed:
+        synset.save(update_fields=["copied_from"])
     return render(
         request,
         "editor/snippets/_source_synset.html",

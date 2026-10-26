@@ -3,70 +3,116 @@
   The source synset card. Here `synset` is the working synset, the one the page is
   about, not the synset this card shows. That one is `source_synset`: either the linked
   source (`synset.copied_from`), or a suggested one.
-{% endcomment %}
-<div
-    id="source-synset"
-    class="card {% if synset.copied_from %}border-primary{% else %}border-secondary-subtle{% endif %}"
->
-  {% if source_synset %}
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h2 class="h6 mb-0">{% trans "Source synset" %}</h2>
-    {% if synset.copied_from %}
-      <span class="text-body-secondary small">{{ source_synset.wordnet }}</span>
-    {% else %}
-      <span class="badge bg-secondary">{% trans "Suggested" %}</span>
-    {% endif %}
-  </div>
-  <div class="card-body">
-    {% comment %}
-      A warning, not an error: many English adjectives are verbs in Bantu languages
-      ("be hungry"), so a source with another part of speech may be right, depending
-      on the approach of the wordnet development project.
-    {% endcomment %}
-    {% if source_synset.pos_id != synset.pos_id %}
-      <div
-          class="alert alert-warning py-1 px-2 small"
-          role="status"
-      >
-        {% with language=synset.wordnet.language.name pos=synset.pos %}
-        {% with source_language=source_synset.wordnet.language.name source_pos=source_synset.pos %}
-          {% blocktrans trimmed %}
-            Different parts of speech: {{ language }} <strong>({{ pos }})</strong>
-            vs {{ source_language }} <strong>({{ source_pos }})</strong>.
-          {% endblocktrans %}
-        {% endwith %}
-        {% endwith %}
-      </div>
-    {% endif %}
-    {# Inside the include, synset is the source synset; outside it, the working synset #}
-    {% include "editor/snippets/_synset_card_body.html" with synset=source_synset senses=source_synset_senses relations=source_relations readonly=True %}
 
-    {% if not synset.copied_from %}
-      <form
-          hx-post="{% url 'editor:link_synset_htmx' pk=synset.pk %}"
-          hx-target="#source-synset"
-          hx-swap="outerHTML"
-      >
-          <input
-              type="hidden"
+  The card has three states, each with its own actions in the header:
+  - linked: Change (search for another) and Unlink;
+  - suggested: Link and Search other;
+  - none: Search.
+  Link and Unlink post to the same view; an empty `target_pk` means unlink. The search
+  buttons open the search form at the top of the card body.
+{% endcomment %}
+{% url 'editor:link_synset_htmx' pk=synset.pk as link_url %}
+{% url 'editor:link_synset_form_htmx' pk=synset.pk as search_url %}
+<div
+    class="card source-synset
+           {% if synset.copied_from %}border-info{% else %}border-secondary-subtle{% endif %}
+           {% if just_saved %}just-saved{% endif %}"
+>
+  {# The brand's lighter blue once a source is linked, grey until then #}
+  <div
+      class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2
+             {% if synset.copied_from %}bg-info-subtle{% else %}bg-secondary-subtle{% endif %}"
+  >
+    {# The title and wordnet name share a baseline, like text; the badge is centred #}
+    <h2
+        class="h6 mb-0 d-flex align-items-baseline gap-1
+               {% if not synset.copied_from %}text-body-secondary{% endif %}"
+    >
+      {% trans "Source synset" %}
+      {% if source_synset %}
+        {# fw-normal: keeps the heading's weight off the wordnet name #}
+        <span class="text-body-secondary small fw-normal">({{ source_synset.wordnet }})</span>
+        {% if not synset.copied_from %}
+          {# A label, not a button: a light pill, unlike the filled buttons #}
+          <span
+              class="badge rounded-pill bg-secondary bg-opacity-25 text-secondary-emphasis
+                     align-self-center"
+          >{% trans "Suggested" %}</span>
+        {% endif %}
+      {% endif %}
+    </h2>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      {% if synset.copied_from %}
+        <button
+            class="btn btn-sm btn-info"
+            hx-get="{{ search_url }}"
+            hx-target="next .synset-form"
+        >{% trans "Change" %}</button>
+        <form
+            hx-post="{{ link_url }}"
+            hx-target="closest .source-synset"
+            hx-swap="outerHTML"
+        >
+          <button
+              class="btn btn-sm btn-info"
+              name="target_pk"
+              value=""
+          >{% trans "Unlink" %}</button>
+        </form>
+      {% elif source_synset %}
+        <form
+            hx-post="{{ link_url }}"
+            hx-target="closest .source-synset"
+            hx-swap="outerHTML"
+        >
+          <button
+              class="btn btn-sm btn-secondary"
               name="target_pk"
               value="{{ source_synset.pk }}"
-          >
-          <button class="btn btn-sm btn-outline-secondary">{% trans "Link as source" %}</button>
-      </form>
-    {% endif %}
-
+          >{% trans "Link" %}</button>
+        </form>
+        <button
+            class="btn btn-sm btn-secondary"
+            hx-get="{{ search_url }}"
+            hx-target="next .synset-form"
+        >{% trans "Search other" %}</button>
+      {% else %}
+        <button
+            class="btn btn-sm btn-secondary"
+            hx-get="{{ search_url }}"
+            hx-target="next .synset-form"
+        >{% trans "Search" %}</button>
+      {% endif %}
+    </div>
   </div>
-  {% else %}
-  <div class="card-header"><h2 class="h6 mb-0">{% trans "Source synset" %}</h2></div>
-  <div class="card-body text-center py-4">
-    <p class="text-secondary mb-3">{% trans "No source synset linked." %}</p>
-    <button
-        class="btn btn-sm btn-outline-secondary"
-        hx-get="{% url 'editor:link_synset_form_htmx' pk=synset.pk %}"
-        hx-target="next .synset-form"
-    >{% trans "Search for source" %}</button>
+  <div class="card-body">
+    {# The search buttons in the header load the search form here #}
     <div class="synset-form"></div>
+    {% if source_synset %}
+      {% comment %}
+        A warning, not an error: many English adjectives are verbs in Bantu languages
+        ("be hungry"), so a source with another part of speech may be right, depending
+        on the approach of the wordnet development project.
+      {% endcomment %}
+      {% if source_synset.pos_id != synset.pos_id %}
+        <div
+            class="alert alert-warning py-1 px-2 small"
+            role="status"
+        >
+          {% with language=synset.wordnet.language.name pos=synset.pos %}
+          {% with source_language=source_synset.wordnet.language.name source_pos=source_synset.pos %}
+            {% blocktrans trimmed %}
+              Different parts of speech: {{ language }} <strong>({{ pos }})</strong>
+              vs {{ source_language }} <strong>({{ source_pos }})</strong>.
+            {% endblocktrans %}
+          {% endwith %}
+          {% endwith %}
+        </div>
+      {% endif %}
+      {# Inside the include, synset is the source synset; outside it, the working synset #}
+      {% include "editor/snippets/_synset_card_body.html" with synset=source_synset senses=source_synset_senses relations=source_relations readonly=True %}
+    {% else %}
+      <p class="text-secondary text-center my-3">{% trans "No source synset linked." %}</p>
+    {% endif %}
   </div>
-  {% endif %}
 </div>

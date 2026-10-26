@@ -12,6 +12,11 @@
   --bs-link-color-rgb: var(--bs-primary-rgb);
   --bs-primary-bg-subtle: color-mix(in srgb, var(--primary) 20%, white);
 
+  /* Bootstrap's info colour, otherwise unused: the brand's lighter blue */
+  --bs-info: var(--primary-light);
+  --bs-info-rgb: 130, 136, 188;
+  --bs-info-bg-subtle: color-mix(in srgb, var(--primary-light) 20%, white);
+
   --bs-danger: var(--sdlr-red);
   --bs-danger-rgb: var(--sdlr-red-rgb);
   --bs-danger-bg-subtle: color-mix(in srgb, var(--sdlr-red) 20%, white);
@@ -41,6 +46,22 @@ code {
   --bs-btn-hover-bg: var(--primary-light);
   --bs-btn-hover-border-color: var(--primary-light);
   --bs-btn-active-bg: var(--primary);
+}
+
+/* Bootstrap's info button, in the brand's lighter blue (see --bs-info). Bootstrap
+   sets its button colours as fixed values, so they don't follow --bs-info. Hover and
+   pressing darken the blue towards navy, which raises the white text's contrast. */
+.btn-info {
+  --bs-btn-color: var(--primary-fg);
+  --bs-btn-bg: var(--primary-light);
+  --bs-btn-border-color: var(--primary-light);
+  --bs-btn-hover-color: var(--primary-fg);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--primary-light) 70%, var(--primary));
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--primary-light) 70%, var(--primary));
+  --bs-btn-active-color: var(--primary-fg);
+  --bs-btn-active-bg: color-mix(in srgb, var(--primary-light) 50%, var(--primary));
+  --bs-btn-active-border-color: var(--primary);
+  --bs-btn-focus-shadow-rgb: var(--bs-info-rgb);
 }
 
 .card {
@@ -135,20 +156,25 @@ code {
 }
 
 /* ── Just-saved highlight ── */
-/* Runs once, when HTMX swaps in the re-rendered sense with this class on one example.
-   Holds the yellow for the first 40% (0.6s), so it's noticed, then fades. */
-@keyframes saved-highlight {
+/* Runs once, when HTMX swaps in an element with this class: an example in a
+   re-rendered sense, or the source synset card after a link or unlink.
+   A yellow ring around the element, held for the first 40% (0.6s), so it's
+   noticed, then faded. A ring rather than a fill, which is too heavy on a card.
+   The rounded corners are in the keyframes, so they only last while it plays. */
+@keyframes saved-ring {
   0%,
   40% {
-    background-color: var(--bs-warning-bg-subtle);
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-warning-rgb), 0.4);
   }
   100% {
-    background-color: transparent;
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-warning-rgb), 0);
   }
 }
 
 .just-saved {
-  animation: saved-highlight 1.5s ease-in;
+  animation: saved-ring 1.5s ease-in;
 }
 
 .btn-add {

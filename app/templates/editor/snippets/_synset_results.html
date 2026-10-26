@@ -2,10 +2,28 @@
 {% load i18n %}
 {% spaceless %}
 {% if synsets %}
-    <ul class="dropdown-menu show">
-        {% for result in synsets %}
-        <li>
-            <button class="dropdown-item" name="target_pk" value="{{ result.pk }}">{{ result | highlight:q }}</button>
+    <ul class="dropdown-menu show" style="max-width: 100%">
+        {% for s in synsets %}
+        <li class="{% cycle 'bg-body-secondary' '' %} body">
+            <button class="dropdown-item text-wrap" name="target_pk" value="{{ s.pk }}">
+                {% if s.display_name %}
+                    {{ s.display_name | highlight:q }}
+                {% else %}
+                    <span class="text-secondary">{% trans "(no words)" %}</span>
+                {% endif %}
+                <br>
+                {% if s.definition %}
+                    {% comment %}
+                        Truncate to protect against long definitions. Neither
+                        the long definition, nor an ellipsised one is ideal in
+                        terms of usability and accessibility, but this should
+                        only affect less than 1% of definitions.
+                    {% endcomment %}
+                    <i>{{ s.definition | truncatechars:200 | truncatewords:20 | highlight:q }}</i>
+                {% else %}
+                    <code>#{{ s.id }}</code>
+                {% endif %}
+            </button>
         </li>
         {% endfor %}
     </ul>

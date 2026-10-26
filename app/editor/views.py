@@ -16,6 +16,7 @@ from lex.models import (
     Sense,
     SenseExample,
     Synset,
+    SynsetExample,
     Word,
     Wordnet,
 )
@@ -315,6 +316,31 @@ def search_words_htmx(request, pk):
         request,
         "editor/snippets/_word_results.html",
         context,
+    )
+
+
+@require_POST
+def delete_synset_example_htmx(request, synset_pk, pk):
+    synset = get_object_or_404(Synset, pk=synset_pk)
+    context = {}
+    try:
+        synsetexample = SynsetExample.objects.get(pk=pk)
+        if synset_pk != synsetexample.synset_id:
+            context["error"] = _(
+                "Attempted to delete a synset example not belonging to this synset."
+            )
+        else:
+            synsetexample.delete()
+    except SynsetExample.DoesNotExist:
+        # We wanted it gone, so let's not complain. Could be a race condition between
+        # different users/windows, or a retry due to an unreceived response.
+        pass
+
+    contex = {"synset": synset}
+    return render(
+        request,
+        "editor/snippets/_synsetexample.html",
+        contex,
     )
 
 

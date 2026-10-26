@@ -14,6 +14,8 @@
   {% include "editor/snippets/_definition_form.html" %}
 {% endif %}
 
+{% include "editor/snippets/_synsetexample.html" with examples=synset.synsetexample_set.all %}
+
 {% include "editor/snippets/_sense_list.html" %}
 
 {% include "editor/snippets/_relations.html" %}

@@ -2,7 +2,7 @@
 {% load i18n %}
 {% spaceless %}
 {% if synsets %}
-    <ul class="dropdown-menu show" style="max-width: 100%">
+    <ul class="dropdown-menu show" style="max-width: 100%; padding: 0">
         {% for s in synsets %}
         <li class="{% cycle 'bg-body-secondary' '' %} body">
             <button class="dropdown-item text-wrap" name="target_pk" value="{{ s.pk }}">

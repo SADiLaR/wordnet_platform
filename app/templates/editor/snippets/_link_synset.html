@@ -1,8 +1,13 @@
+{% comment %}
+  The search form for a source synset, loaded into the card's .synset-form. Cancel
+  empties that whole slot, so the form's margin doesn't leave a gap behind.
+{% endcomment %}
 <form
+      class="mb-3"
       hx-post="{% url 'editor:link_synset_htmx' pk=synset.pk %}"
-      hx-target="#source-synset"
+      hx-target="closest .source-synset"
       hx-swap="outerHTML"
       hx-disinherit="hx-swap"
 >
-    {% include "editor/snippets/_synset_search_bar.html" with wordnet_id=source_wordnet %}
+    {% include "editor/snippets/_synset_search_bar.html" with wordnet_id=source_wordnet cancel_target="closest .synset-form" %}
 </form>

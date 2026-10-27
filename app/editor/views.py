@@ -583,30 +583,33 @@ def link_synset_form_htmx(request, pk):
 
 @require_POST
 def link_synset_htmx(request, pk):
-    # Linking doesn't change the status: the link isn't part of the synset's content.
+    # Links the source synset given by `target_pk`, or unlinks it if that's empty.
+    # Neither changes the status: the link isn't part of the synset's content.
     # The card's POS warning names both synsets' languages and parts of speech.
     synset = get_object_or_404(
         Synset.objects.select_related("pos", "wordnet__language"), pk=pk
     )
-    # Only a synset in the source wordnet can be linked, and never the synset
-    # itself. Anything else is a 404, as if the target didn't exist.
-    target_synset = get_object_or_404(
-        Synset.objects.select_related("pos", "wordnet__language")
-        .filter(wordnet_id=settings.SOURCE_WORDNET_ID)
-        .exclude(pk=synset.pk),
-        pk=request.POST.get("target_pk"),
-    )
-    # Linking the synset that's already linked saves nothing. Assigning it anyway
-    # gives the card the target's wordnet, language and POS without another query.
-    changed = synset.copied_from_id != target_synset.pk
+    target_synset = None
+    if target_pk := request.POST.get("target_pk"):
+        # Only a synset in the source wordnet can be linked, and never the synset
+        # itself. Anything else is a 404, as if the target didn't exist.
+        target_synset = get_object_or_404(
+            Synset.objects.select_related("pos", "wordnet__language")
+            .filter(wordnet_id=settings.SOURCE_WORDNET_ID)
+            .exclude(pk=synset.pk),
+            pk=target_pk,
+        )
+    # Linking the synset that's already linked, or unlinking when nothing is linked,
+    # saves nothing. Assigning it anyway gives the card the target's wordnet, language
+    # and POS without another query.
+    changed = synset.copied_from_id != (target_synset.pk if target_synset else None)
     synset.copied_from = target_synset
     if changed:
         synset.save(update_fields=["copied_from"])
-    return render(
-        request,
-        "editor/snippets/_source_synset.html",
-        _source_synset_context(synset),
-    )
+    context = _source_synset_context(synset)
+    # Briefly highlights the card, so the user sees the result of their click
+    context["just_saved"] = True
+    return render(request, "editor/snippets/_source_synset.html", context)
 
 
 @require_GET

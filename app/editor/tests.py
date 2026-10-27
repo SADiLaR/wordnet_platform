@@ -448,6 +448,8 @@ class EditorViewTest(TestCase):
         self.assertContains(response, 'name="definition"', count=1)
         # Only the source card has no relations to show
         self.assertContains(response, "No relations.", count=1)
+        # Only a link or unlink highlights the card
+        self.assertNotContains(response, "just-saved")
         # No word search or relation form for the source synset
         for url_name in ("search_words_htmx", "add_relation_form_htmx"):
             self.assertNotContains(
@@ -463,6 +465,30 @@ class EditorViewTest(TestCase):
                 reverse("editor:link_synset_htmx", kwargs={"pk": synset_obj.pk}),
                 {"target_pk": target_pk},
             )
+
+    def _assert_source_card(self, response, state):
+        # The source card's border, header and actions in a state: "linked",
+        # "suggested" or "none". For the card snippet only: on the full page, the
+        # working card has a border of its own.
+        actions = {
+            "linked": ["Change", "Unlink"],
+            "suggested": ["Link", "Search other"],
+            "none": ["Search"],
+        }[state]
+        for label in ("Change", "Unlink", "Link", "Search other", "Search"):
+            expected = 1 if label in actions else 0
+            self.assertContains(response, f">{label}</button>", count=expected)
+        if state == "linked":
+            self.assertContains(response, "border-info", count=1)
+        else:
+            self.assertContains(response, "border-secondary-subtle", count=1)
+        # A linked or suggested source shows its wordnet; only a suggestion is marked
+        wordnet_name = f"({escape(str(self.wordnet_2))})"
+        self.assertContains(response, wordnet_name, count=int(state != "none"))
+        self.assertContains(response, ">Suggested<", count=int(state == "suggested"))
+        self.assertContains(
+            response, "No source synset linked.", count=int(state == "none")
+        )
 
     def test_link_source_synset(self):
         self.synset_a.refresh_from_db()
@@ -488,6 +514,8 @@ class EditorViewTest(TestCase):
         self.assertTemplateUsed(response, "editor/snippets/_source_synset.html")
         self.assertTemplateNotUsed(response, "editor/synset_detail.html")
         self.assertEqual(response.context["source_synset"], self.synset_d)
+        self._assert_source_card(response, "linked")
+        self.assertContains(response, "just-saved", count=1)
         # A different part of speech warns, but doesn't block the link
         self.assertContains(
             response,
@@ -561,6 +589,78 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.context["source_synset"], self.synset_d)
         # Every save adds a history record, so an unchanged count means no save
         self.assertEqual(self.synset_e.history.count(), history_count)
+        # Nothing changed, but the card still shows the click was handled
+        self._assert_source_card(response, "linked")
+        self.assertContains(response, "just-saved", count=1)
+
+    def test_unlink_source_synset(self):
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
+        self.assertEqual(self.synset_e.status, Synset.Status.STUB)
+        # No Princeton ID, so there's no suggestion to fall back to
+        self.assertIsNone(self.synset_e.princeton_id)
+        history_count = self.synset_e.history.count()
+        # Queries:
+        # fetch synset_e (with pos, wordnet__language)
+        # (an empty target_pk: no target to fetch)
+        # update synset_e
+        # insert history record
+        # (no guess: no Princeton ID)
+        with self.assertNumQueries(3):
+            response = self._post_link_synset(self.synset_e, "")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "editor/snippets/_source_synset.html")
+        self.assertIsNone(response.context["source_synset"])
+        self._assert_source_card(response, "none")
+        self.assertContains(response, "just-saved", count=1)
+        self.synset_e.refresh_from_db()
+        self.assertIsNone(self.synset_e.copied_from_id)
+        self.assertEqual(self.synset_e.history.count(), history_count + 1)
+        # Unlinking isn't a change to the synset's content
+        self.assertEqual(self.synset_e.status, Synset.Status.STUB)
+
+    def test_unlink_source_synset_falls_back_to_suggestion(self):
+        # synset_f's Princeton ID matches synset_d, but it's linked to another source
+        other_source = Synset.objects.create(
+            definition="'n Ander bron in die tweede wordnet",
+            wordnet=self.wordnet_2,
+            pos=self.pos_noun,
+        )
+        Synset.objects.filter(pk=self.synset_f.pk).update(copied_from=other_source)
+        self.synset_f.refresh_from_db()
+        self.assertEqual(self.synset_f.copied_from_id, other_source.pk)
+        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+            self.assertEqual(_guess_source_synset(self.synset_f), self.synset_d)
+        # Queries:
+        # fetch synset_f (with pos, wordnet__language)
+        # update synset_f
+        # insert history record
+        # guess the source synset (finds synset_d, with pos, wordnet__language)
+        # relations of synset_d (_source_synset_context)
+        # synset examples of synset_d (_synset_card_body.html)
+        # senses of synset_d (none, so no example prefetch)
+        with self.assertNumQueries(7):
+            response = self._post_link_synset(self.synset_f, "")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["source_synset"], self.synset_d)
+        self._assert_source_card(response, "suggested")
+        self.assertContains(response, "just-saved", count=1)
+        self.synset_f.refresh_from_db()
+        self.assertIsNone(self.synset_f.copied_from_id)
+
+    def test_unlink_source_synset_not_linked(self):
+        self.assertIsNone(self.synset_a.copied_from_id)
+        self.assertIsNone(self.synset_a.princeton_id)
+        history_count = self.synset_a.history.count()
+        # Queries:
+        # fetch synset_a (with pos, wordnet__language)
+        # (no update or history record: nothing was linked)
+        # (no guess: no Princeton ID)
+        with self.assertNumQueries(1):
+            response = self._post_link_synset(self.synset_a, "")
+        self.assertEqual(response.status_code, 200)
+        self._assert_source_card(response, "none")
+        # Every save adds a history record, so an unchanged count means no save
+        self.assertEqual(self.synset_a.history.count(), history_count)
 
     def test_synset_detail_in_source_wordnet(self):
         self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
@@ -576,7 +676,6 @@ class EditorViewTest(TestCase):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_d))
         self.assertTemplateNotUsed(response, "editor/snippets/_source_synset.html")
-        self.assertNotContains(response, 'id="source-synset"')
         # The source synset context returned early: no source synset was looked up
         self.assertTrue(response.context["in_source_wordnet"])
         self.assertNotIn("source_synset", response.context)

@@ -1,6 +1,11 @@
 {% load i18n editor %}
 <li class="sense-item hover-reveal-delete py-2 border-bottom">
-  <span class="fw-medium">{{ sense.word.text }}</span>{% if not readonly %}
+  <span class="fw-medium">{{ sense.word.text }}</span>
+  {% if synset.pos_id != sense.word.pos_id %}
+      <span aria-hidden="true">⚠</span>
+      <span class="fw-bold">{{ sense.word.pos }}</span>
+  {% endif %}
+  {% if not readonly %}
   <button
       type="button"
       class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"

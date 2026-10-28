@@ -69,7 +69,7 @@ def _examples_prefetch(lookup="senseexample_set"):
 
 def _senses(synset):
     return (
-        synset.sense_set.select_related("word")
+        synset.sense_set.select_related("word__pos")
         .prefetch_related(_examples_prefetch())
         .order_by("word__text")
     )
@@ -400,7 +400,7 @@ def add_sense_htmx(request, pk):
     synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
 
     word_pk = request.POST.get("word_pk")
-    word = get_object_or_404(Word, pk=word_pk)
+    word = get_object_or_404(Word.objects.select_related("pos"), pk=word_pk)
 
     context = {
         "synset": synset,
@@ -465,14 +465,14 @@ def save_sense_example_htmx(request, synset_pk, example_pk=None):
     # brings the synset along, so it needs no query of its own.
     if example_pk is None:
         sense = get_object_or_404(
-            Sense.objects.select_related("word", "synset"),
+            Sense.objects.select_related("word__pos", "synset"),
             pk=request.POST.get("sense_pk"),
             synset_id=synset_pk,
         )
         example = SenseExample(sense=sense)
     else:
         example = get_object_or_404(
-            SenseExample.objects.select_related("sense__word", "sense__synset"),
+            SenseExample.objects.select_related("sense__word__pos", "sense__synset"),
             pk=example_pk,
             sense__synset_id=synset_pk,
         )
@@ -493,7 +493,7 @@ def save_sense_example_htmx(request, synset_pk, example_pk=None):
 @require_POST
 def delete_sense_example_htmx(request, synset_pk, example_pk):
     example = get_object_or_404(
-        SenseExample.objects.select_related("sense__word", "sense__synset"),
+        SenseExample.objects.select_related("sense__word__pos", "sense__synset"),
         pk=example_pk,
         sense__synset_id=synset_pk,
     )

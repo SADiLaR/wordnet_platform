@@ -7,7 +7,7 @@ from django.utils.html import escape
 
 from editor.filters import SynsetFilter
 from editor.models import Assignment
-from editor.views import _guess_princeton_id, _guess_source_synset
+from editor.views import _copied_synsets, _guess_source_synset
 from lex.models import (
     Language,
     PartOfSpeech,
@@ -370,22 +370,25 @@ class EditorViewTest(TestCase):
             ordered=False,
         )
 
-    def test_guess_princeton_id(self):
-        self.assertEqual("12345678-v", _guess_princeton_id("12345678-v"))
-        self.assertEqual("", _guess_princeton_id(""))
-        self.assertEqual(None, _guess_princeton_id(None))
-        self.assertEqual("12345678-v", _guess_princeton_id("ENG20-12345678-v"))
-
     def test_guess_source_synset(self):
+        # A synset with the old tool's form of synset_d's Princeton ID
+        old_id_synset = Synset.objects.create(
+            definition="'n Gemigreerde synset",
+            wordnet=self.wordnet,
+            pos=self.pos_verb,
+            princeton_id=f"ENG20-{self.synset_d.princeton_id}",
+        )
         with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
             existing = _guess_source_synset(self.synset_f)
             no_match = _guess_source_synset(self.synset_b)
             no_princeton_id = _guess_source_synset(self.synset_a)
             not_itself = _guess_source_synset(self.synset_d)
+            old_id = _guess_source_synset(old_id_synset)
         self.assertEqual(existing, self.synset_d)
         self.assertEqual(no_match, None)
         self.assertEqual(no_princeton_id, None)
         self.assertEqual(not_itself, None)
+        self.assertEqual(old_id, None)
 
     def test_guess_source_synset_view_existing(self):
         with self.assertNumQueries(16):
@@ -444,6 +447,8 @@ class EditorViewTest(TestCase):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
         self.assertContains(response, escape(self.synset_d.definition))
+        # The copied synsets card is only for synsets in the source wordnet
+        self.assertTemplateNotUsed(response, "editor/snippets/_copied_synsets.html")
         # One definition form: the working card's
         self.assertContains(response, 'name="definition"', count=1)
         # Only the source card has no relations to show
@@ -663,22 +668,210 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_a.history.count(), history_count)
 
     def test_synset_detail_in_source_wordnet(self):
+        # synset_d is in the source wordnet. Its copies are synset_e (linked) and
+        # synset_f (same Princeton ID, not linked), both in self.wordnet, the only
+        # other wordnet.
         self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
-        # synset_d has a Princeton ID, so without the check it would look for a guess
-        self.assertTrue(self.synset_d.princeton_id)
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
+        self.assertIsNone(self.synset_f.copied_from_id)
+        self.assertEqual(self.synset_f.princeton_id, self.synset_d.princeton_id)
+        self.assertEqual(set(Wordnet.objects.all()), {self.wordnet, self.wordnet_2})
         # Queries:
         # fetch synset_d (with pos, wordnet, language, and the same for copied_from)
         # 8 concern exists() checks (_synset_context)
         # relations of synset_d (_synset_context)
+        # copies of synset_d, with their wordnets (_copied_synsets)
+        # wordnets for the stub dropdown (_source_synset_context)
+        # synset examples of synset_d (template)
         # senses of synset_d (none, so no example prefetch)
         # (no source card: no guess, no source relations or senses)
-        with self.assertNumQueries(12):
+        with self.assertNumQueries(14):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_d))
+        # The copied synsets card takes the source card's place
         self.assertTemplateNotUsed(response, "editor/snippets/_source_synset.html")
+        self.assertTemplateUsed(response, "editor/snippets/_copied_synsets.html")
         # The source synset context returned early: no source synset was looked up
         self.assertTrue(response.context["in_source_wordnet"])
         self.assertNotIn("source_synset", response.context)
+        # Both copies are linked; only synset_f, which isn't linked, is a suggestion
+        for copy in (self.synset_e, self.synset_f):
+            self.assertContains(response, self._get_synset_detail_url(copy))
+        self.assertContains(response, "Suggested", count=1)
+        # Every wordnet but the source has a copy, so there's no form to create one
+        self.assertNotContains(
+            response, reverse("editor:create_stub", kwargs={"pk": self.synset_d.pk})
+        )
+
+    def test_copied_synsets(self):
+        # synset_d is in the source wordnet. synset_e is linked to it; synset_f only
+        # shares its Princeton ID. Both are in self.wordnet.
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
+        self.assertIsNone(self.synset_f.copied_from_id)
+        self.assertEqual(self.synset_f.princeton_id, self.synset_d.princeton_id)
+        # A copy in a wordnet whose name sorts before self.wordnet's
+        first_wordnet = Wordnet.objects.create(
+            name="Eerste Toets Wordnet", language=self.wordnet.language
+        )
+        self.assertLess(first_wordnet.name, self.wordnet.name)
+        first_copy = Synset.objects.create(
+            definition="'n Kopie in die eerste wordnet",
+            wordnet=first_wordnet,
+            pos=self.pos_verb,
+            copied_from=self.synset_d,
+        )
+        # Not copies: another synset in the source wordnet with the same Princeton ID,
+        # a synset linked to that one (so it's not a suggestion for synset_d), and a
+        # synset with the old tool's form of the ID
+        duplicate = Synset.objects.create(
+            definition="'n Duplikaat in die bronwordnet",
+            wordnet=self.wordnet_2,
+            pos=self.pos_verb,
+            princeton_id=self.synset_d.princeton_id,
+        )
+        Synset.objects.create(
+            definition="'n Kopie van die duplikaat",
+            wordnet=first_wordnet,
+            pos=self.pos_verb,
+            princeton_id=self.synset_d.princeton_id,
+            copied_from=duplicate,
+        )
+        Synset.objects.create(
+            definition="'n Gemigreerde synset",
+            wordnet=first_wordnet,
+            pos=self.pos_verb,
+            princeton_id=f"ENG20-{self.synset_d.princeton_id}",
+        )
+        # Queries:
+        # copies of synset_d, with their wordnets: reading a copy's wordnet, as the
+        # card does, takes no query of its own
+        with self.assertNumQueries(1):
+            with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+                copied_synsets = list(_copied_synsets(self.synset_d))
+                wordnet_names = [copy.wordnet.name for copy in copied_synsets]
+        # By wordnet name, then display name (all empty here), then pk
+        self.assertEqual(copied_synsets, [first_copy, self.synset_e, self.synset_f])
+        self.assertEqual(
+            wordnet_names, [first_wordnet.name, self.wordnet.name, self.wordnet.name]
+        )
+
+    def test_synset_detail_no_copies(self):
+        # A source synset without a Princeton ID, so _copied_synsets() looks for linked
+        # copies only. Without that check, it would filter on princeton_id=None, which
+        # Django turns into IS NULL: every unlinked synset without a Princeton ID, like
+        # synset_a, would be listed as a copy.
+        synset = Synset.objects.create(
+            definition="'n Bronsynset sonder kopieë",
+            wordnet=self.wordnet_2,
+            pos=self.pos_noun,
+        )
+        self.assertIsNone(self.synset_a.princeton_id)
+        self.assertIsNone(self.synset_a.copied_from_id)
+        # The source wordnet and one other, which can have a stub
+        self.assertEqual(set(Wordnet.objects.all()), {self.wordnet_2, self.wordnet})
+        # Queries:
+        # fetch synset (with pos, wordnet, language, and the same for copied_from)
+        # 8 concern exists() checks (_synset_context)
+        # relations of synset (_synset_context)
+        # copies of synset (_copied_synsets)
+        # wordnets for the stub dropdown (_source_synset_context)
+        # synset examples of synset (template)
+        # senses of synset (none, so no example prefetch)
+        with self.assertNumQueries(14):
+            with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+                response = self.client.get(self._get_synset_detail_url(synset))
+        self.assertEqual(response.context["copied_synsets"], [])
+        self.assertContains(response, "Not copied to any wordnet yet.")
+        # Every wordnet but the source can have a stub
+        self.assertEqual(response.context["stub_wordnets"], [self.wordnet])
+        self.assertContains(
+            response, reverse("editor:create_stub", kwargs={"pk": synset.pk})
+        )
+        self.assertContains(
+            response,
+            f'<option value="{self.wordnet.pk}">{self.wordnet}</option>',
+            html=True,
+        )
+
+    def _post_create_stub(self, synset_obj, wordnet_pk):
+        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+            return self.client.post(
+                reverse("editor:create_stub", kwargs={"pk": synset_obj.pk}),
+                {"wordnet_pk": wordnet_pk},
+            )
+
+    def test_create_stub(self):
+        # synset_d is in the source wordnet, and new_wordnet has no copy of it
+        self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
+        new_wordnet = Wordnet.objects.create(
+            name="Nuwe Toets Wordnet", language=self.wordnet.language
+        )
+        self.assertFalse(Synset.objects.filter(wordnet=new_wordnet).exists())
+        # Queries:
+        # fetch synset_d, checking it's in the source wordnet
+        # fetch new_wordnet, checking it's not the source wordnet
+        # look for a copy of synset_d in new_wordnet (none)
+        # insert the stub
+        # insert its history record
+        with self.assertNumQueries(5):
+            response = self._post_create_stub(self.synset_d, new_wordnet.pk)
+        stub = Synset.objects.get(wordnet=new_wordnet)
+        self.assertRedirects(
+            response, self._get_synset_detail_url(stub), fetch_redirect_response=False
+        )
+        self.assertEqual(stub.pos_id, self.synset_d.pos_id)
+        self.assertEqual(stub.princeton_id, self.synset_d.princeton_id)
+        self.assertEqual(stub.copied_from_id, self.synset_d.pk)
+        self.assertEqual(stub.status, Synset.Status.STUB)
+        self.assertEqual(stub.definition, "")
+        self.assertEqual(stub.history.count(), 1)
+
+    def test_create_stub_existing_copy(self):
+        # new_wordnet has a migrated synset with synset_d's Princeton ID, never linked.
+        # It counts as a copy, so it's opened instead of creating a second one.
+        new_wordnet = Wordnet.objects.create(
+            name="Nuwe Toets Wordnet", language=self.wordnet.language
+        )
+        migrated = Synset.objects.create(
+            definition="'n Gemigreerde synset",
+            wordnet=new_wordnet,
+            pos=self.pos_verb,
+            princeton_id=self.synset_d.princeton_id,
+        )
+        synset_count = Synset.objects.count()
+        # Queries:
+        # fetch synset_d, checking it's in the source wordnet
+        # fetch new_wordnet, checking it's not the source wordnet
+        # look for a copy of synset_d in new_wordnet (found: migrated)
+        with self.assertNumQueries(3):
+            response = self._post_create_stub(self.synset_d, new_wordnet.pk)
+        self.assertRedirects(
+            response,
+            self._get_synset_detail_url(migrated),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(Synset.objects.count(), synset_count)
+
+    def test_create_stub_not_from_source_wordnet(self):
+        # synset_a isn't in the source wordnet, so it can't be copied
+        self.assertNotEqual(self.synset_a.wordnet_id, self.wordnet_2.pk)
+        synset_count = Synset.objects.count()
+        # Queries:
+        # fetch synset_a in the source wordnet (not found)
+        with self.assertNumQueries(1):
+            response = self._post_create_stub(self.synset_a, self.wordnet.pk)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(Synset.objects.count(), synset_count)
+
+    def test_create_stub_into_source_wordnet(self):
+        synset_count = Synset.objects.count()
+        # Queries:
+        # fetch synset_d, checking it's in the source wordnet
+        # fetch the source wordnet, excluded as a target (not found)
+        with self.assertNumQueries(2):
+            response = self._post_create_stub(self.synset_d, self.wordnet_2.pk)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(Synset.objects.count(), synset_count)
 
     def test_status_htmx_get(self):
         with self.assertNumQueries(1):

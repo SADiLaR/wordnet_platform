@@ -33,19 +33,13 @@ def front_page(request):
     return render(request, "editor/front_page.html")
 
 
-def _guess_princeton_id(id_code):
-    if id_code and id_code.startswith("ENG20-"):
-        return id_code[6:]
-    return id_code
-
-
 def _guess_source_synset(synset):
-    guessed_id = _guess_princeton_id(synset.princeton_id)
-    if guessed_id:
+    # Only an exact match
+    if synset.princeton_id:
         source_synset = (
             Synset.objects.select_related("pos", "wordnet__language")
             .filter(
-                princeton_id=guessed_id,
+                princeton_id=synset.princeton_id,
                 wordnet_id=settings.SOURCE_WORDNET_ID,  # TODO: make source wordnet configurable
             )
             .exclude(pk=synset.pk)
@@ -177,11 +171,41 @@ def _synset_context(pk=None, synset=None):
     return context
 
 
+def _copied_synsets(source_synset):
+    """The synsets in other wordnets that were copied from a source synset."""
+    # A copy is linked to its source, or, if it was migrated and never linked, has the
+    # same Princeton ID: the synsets whose source card suggests this synset as the
+    # source. A synset linked to another source isn't one, even with the same
+    # Princeton ID.
+    is_copy = Q(copied_from=source_synset)
+    if source_synset.princeton_id:
+        is_copy |= Q(copied_from=None, princeton_id=source_synset.princeton_id)
+    return (
+        Synset.objects.filter(is_copy)
+        .exclude(wordnet_id=settings.SOURCE_WORDNET_ID)
+        .select_related("wordnet")
+        .order_by("wordnet__name", "display_name", "pk")
+    )
+
+
 def _source_synset_context(synset):
     """Context for the source synset card: the linked source, or else a guess."""
-    # Synsets in the source wordnet have no source, so the page leaves the card out
+    # Synsets in the source wordnet have no source, so the page shows their copies
+    # instead of the source card
     if synset.wordnet_id == settings.SOURCE_WORDNET_ID:
-        return {"synset": synset, "in_source_wordnet": True}
+        copied_synsets = list(_copied_synsets(synset))
+        # A stub can be created in any other wordnet that doesn't have a copy yet
+        stub_wordnets = (
+            Wordnet.objects.exclude(pk=settings.SOURCE_WORDNET_ID)
+            .exclude(pk__in={copy.wordnet_id for copy in copied_synsets})
+            .order_by("name", "pk")
+        )
+        return {
+            "synset": synset,
+            "in_source_wordnet": True,
+            "copied_synsets": copied_synsets,
+            "stub_wordnets": list(stub_wordnets),
+        }
 
     if synset.copied_from_id:
         source_synset = synset.copied_from
@@ -211,6 +235,33 @@ def synset_detail(request, pk):
         "editor/synset_detail.html",
         context,
     )
+
+
+@require_POST
+def create_stub(request, pk):
+    """Create a stub in another wordnet, copied from a source synset, and open it."""
+    # Only a synset in the source wordnet can be copied, and only into another
+    # wordnet. Anything else is a 404.
+    source_synset = get_object_or_404(
+        Synset, pk=pk, wordnet_id=settings.SOURCE_WORDNET_ID
+    )
+    wordnet = get_object_or_404(
+        Wordnet.objects.exclude(pk=settings.SOURCE_WORDNET_ID),
+        pk=request.POST.get("wordnet_pk"),
+    )
+    # The page leaves out wordnets that have a copy, but one may have been made since
+    # it was loaded (another person, another window). Open that one instead.
+    stub = _copied_synsets(source_synset).filter(wordnet=wordnet).first()
+    if stub is None:
+        # The definition stays empty: the linguist writes their own
+        stub = Synset.objects.create(
+            wordnet=wordnet,
+            pos_id=source_synset.pos_id,
+            princeton_id=source_synset.princeton_id,
+            copied_from=source_synset,
+            status=Synset.Status.STUB,
+        )
+    return redirect(stub)
 
 
 @require_POST

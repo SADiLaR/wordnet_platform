@@ -1,0 +1,72 @@
+{% load i18n %}
+{% comment %}
+  The copied synsets card, on the page of a synset in the source wordnet: the synsets
+  in other wordnets that were copied from it, and a form to create a stub in a wordnet
+  that has none. The counterpart of the source card, which other synsets' pages show in
+  the same place.
+{% endcomment %}
+<div class="card border-secondary-subtle">
+  <div class="card-header">
+    <h2 class="h6 mb-0">{% trans "Copies in other wordnets" %}</h2>
+  </div>
+  <div class="card-body">
+    {% if copied_synsets %}
+      <ul class="list-unstyled vstack gap-2 mb-0">
+        {% for copy in copied_synsets %}
+          <li class="d-flex flex-wrap align-items-center column-gap-2">
+            <span class="text-body-secondary">{{ copy.wordnet }}</span>
+            {# Text directly against the tags: whitespace inside <a> gets underlined #}
+            <a
+                href="{% url 'editor:synset_detail' pk=copy.pk %}"
+            >{{ copy.short_display_name }}</a>
+            <span class="badge badge-status status-{{ copy.status }}">
+              {{ copy.get_status_display }}
+            </span>
+            {# Not linked: found by its Princeton ID. The same pill as on the source card #}
+            {% if not copy.copied_from_id %}
+              <span
+                  class="badge rounded-pill bg-secondary bg-opacity-25 text-secondary-emphasis"
+              >{% trans "Suggested" %}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-body-secondary mb-0">
+        {% trans "Not copied to any wordnet yet." %}
+      </p>
+    {% endif %}
+
+    {% comment %}
+      A plain form, not HTMX: the response is a redirect to the new stub's page. The
+      list has only the wordnets without a copy, so the form is left out when every
+      wordnet has one.
+    {% endcomment %}
+    {% if stub_wordnets %}
+      <form
+          action="{% url 'editor:create_stub' pk=synset.pk %}"
+          method="post"
+          class="d-flex flex-wrap gap-2 border-top pt-3 mt-3"
+      >
+        {% csrf_token %}
+        <label
+            for="stub-wordnet"
+            class="visually-hidden"
+        >{% trans "Wordnet" %}</label>
+        {# The empty first option and `required` make the user choose a wordnet #}
+        <select
+            id="stub-wordnet"
+            name="wordnet_pk"
+            class="form-select form-select-sm w-auto"
+            required
+        >
+          <option value="">{% trans "Choose a wordnet…" %}</option>
+          {% for wordnet in stub_wordnets %}
+            <option value="{{ wordnet.pk }}">{{ wordnet }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-primary">{% trans "Create stub" %}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>

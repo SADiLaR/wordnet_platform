@@ -56,9 +56,6 @@ class Command(BaseCommand):
             self.update_relation_display_names()
             self.update_synset_status()
 
-            conn.close()
-            self.close_migration_logging()
-
         except Exception as e:
             self.log_skip(
                 stage="command",
@@ -66,6 +63,10 @@ class Command(BaseCommand):
                 error=e,
             )
             raise
+
+        finally:
+            conn.close()
+            self.close_migration_logging()
 
     def update_synset_status(self):
         """
@@ -211,6 +212,8 @@ class Command(BaseCommand):
         self.total_migrated += count
 
     def close_migration_logging(self):
+        # Write any buffered skipped rows to disk.
+        self.skipped_log_file.close()
 
         summary_path = self.log_directory / "log_summary.csv"
 
@@ -263,7 +266,7 @@ class Command(BaseCommand):
         if value is None:
             return ""
 
-        return " ".join(unescape(str(value)).split())
+        return " ".join(unescape(str(value)).split()).rstrip(",;:")
 
     @staticmethod
     def clean_example(value):

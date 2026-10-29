@@ -23,6 +23,13 @@ class RegexpCount(Func):
 
 
 class WordManager(models.Manager):
+    def affected_synsets(self, qs):
+        Sense = apps.get_model("lex", "Sense")
+        Synset = apps.get_model("lex", "Synset")
+        return Synset.objects.filter(
+            id__in=Sense.objects.filter(word__in=qs.order_by()).values("synset_id")
+        )
+
     def _language_mismatch(self):
         Sense = apps.get_model("lex", "Sense")
         mismatching_senses = Sense.objects.filter(word_id=OuterRef("pk")).exclude(
@@ -69,14 +76,20 @@ class WordManager(models.Manager):
         }
 
     def concerns(self):
-        return [
+        concerns = [
             self._language_mismatch(),
             self._suspicious_characters(),
             self._suspicious_brackets(),
         ]
+        for concern in concerns:
+            concern["synsets"] = self.affected_synsets(concern["qs"])
+        return concerns
 
 
 class SynsetManager(models.Manager):
+    def affected_synsets(self, qs):
+        return qs
+
     def _missing_definition(self):
         return {
             "key": "missing-definition",
@@ -150,13 +163,16 @@ class SynsetManager(models.Manager):
         }
 
     def concerns(self):
-        return [
+        concerns = [
             self._missing_definition(),
             self._without_words(),
             self._mixed_pos(),
             self._pos_mismatch(),
             self._sense_example(),
         ]
+        for concern in concerns:
+            concern["synsets"] = self.affected_synsets(concern["qs"])
+        return concerns
 
 
 class ActiveRelationManager(models.Manager):
@@ -172,6 +188,13 @@ class ActiveRelationManager(models.Manager):
 
 
 class RelationManager(models.Manager):
+    def affected_synsets(self, qs):
+        Synset = apps.get_model("lex", "Synset")
+        qs = qs.order_by()
+        return Synset.objects.filter(
+            Q(id__in=qs.values("synset_from_id")) | Q(id__in=qs.values("synset_to_id"))
+        )
+
     pair_order = (
         Least("synset_from_id", "synset_to_id"),
         Greatest("synset_from_id", "synset_to_id"),
@@ -211,6 +234,9 @@ class RelationManager(models.Manager):
         }
 
     def concerns(self):
-        return [
+        concerns = [
             self._both_directions(),
         ]
+        for concern in concerns:
+            concern["synsets"] = self.affected_synsets(concern["qs"])
+        return concerns

@@ -115,7 +115,7 @@ class Synset(models.Model):
             )
             return f"{word_part} : {definition[:last_wanted_space]} ..."
 
-    def update_display_name(self):
+    def update_display_name(self, save=True):
         """We use display_name to avoid making DB calls in __str__().
         No historical record is kept of this change to the synset."""
         senses = (
@@ -129,7 +129,8 @@ class Synset(models.Model):
         display_words = words[: min(len(words), MAX_WORDS)]
         display_ellipsis = ", ..." if len(words) > MAX_WORDS else ""
         self.display_name = ", ".join(display_words) + display_ellipsis
-        self.save_without_historical_record()
+        if save:
+            self.save_without_historical_record()
 
     def short_display_name(self):
         return self.display_name or f"({self.pk})"

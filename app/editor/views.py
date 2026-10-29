@@ -6,6 +6,7 @@ from django.db.models import Prefetch, Q, prefetch_related_objects
 from django.db.models.functions import Length
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
@@ -58,6 +59,30 @@ def _save_updated_synset(synset, updated_fields=None):
     synset.save(update_fields=updated_fields)
 
 
+def _render_with_summary(request, template, context, senses=None):
+    """render(), plus the synset's heading, title and status as out-of-band swaps.
+
+    After `template`, the response has the synset's heading, tab title and status, so
+    that those parts of the page stay up to date. HTMX replaces the matching elements
+    wherever they are on the page. Views that change a synset's content respond with
+    this.
+
+    The heading lists the synset's words. A view that has just rendered the senses
+    passes them in, which saves querying them again.
+    """
+    response = render(request, template, context)
+    synset = context["synset"]
+    if senses is None:
+        senses = synset.sense_set.select_related("word").order_by("word__text")
+    summary_context = {"synset": synset, "senses": senses}
+    response.write(
+        render_to_string(
+            "editor/snippets/_synset_summary_oob.html", summary_context, request
+        )
+    )
+    return response
+
+
 def _examples_prefetch(lookup="senseexample_set"):
     # Examples with empty text are left over from the old tool; treat them as missing.
     # Alphabetical, by the database's collation; pk only breaks ties between duplicates.
@@ -73,6 +98,14 @@ def _senses(synset):
         .prefetch_related(_examples_prefetch())
         .order_by("word__text")
     )
+
+
+def _synset_examples(synset):
+    # No new synset examples are added. Princeton's are kept for historical reasons;
+    # the other languages' are to be converted into sense examples, each linked to the
+    # right word. Those with empty text are left over from the old tool, so they're
+    # left out.
+    return synset.synsetexample_set.exclude(text="").order_by("text", "pk")
 
 
 def assignment_queue(request, wn_pk=None):
@@ -164,6 +197,7 @@ def _synset_context(pk=None, synset=None):
     context = {
         "synset": synset,
         "senses": senses,
+        "synset_examples": _synset_examples(synset),
         "relations": _build_relations(pk),
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
         "concerns": concerns,
@@ -213,9 +247,11 @@ def _source_synset_context(synset):
         source_synset = _guess_source_synset(synset)
 
     source_synset_senses = []
+    source_synset_examples = []
     source_relations = None
     if source_synset:
         source_synset_senses = _senses(source_synset)
+        source_synset_examples = _synset_examples(source_synset)
         source_relations = _build_relations(source_synset.pk)
 
     return {
@@ -223,6 +259,7 @@ def _source_synset_context(synset):
         "in_source_wordnet": False,
         "source_synset": source_synset,
         "source_synset_senses": source_synset_senses,
+        "source_synset_examples": source_synset_examples,
         "source_relations": source_relations,
     }
 
@@ -387,7 +424,7 @@ def delete_synset_example_htmx(request, synset_pk, pk):
         # different users/windows, or a retry due to an unreceived response.
         pass
 
-    contex = {"synset": synset}
+    contex = {"synset": synset, "synset_examples": _synset_examples(synset)}
     return render(
         request,
         "editor/snippets/_synsetexample.html",
@@ -409,18 +446,35 @@ def add_sense_htmx(request, pk):
 
     if word.language_id != synset.wordnet.language_id:
         context["error"] = _("The word and synset belong to different languages.")
-        return render(request, "editor/snippets/_sense_list.html", context)
+        return _render_with_summary(
+            request,
+            "editor/snippets/_sense_list.html",
+            context,
+            senses=context["senses"],
+        )
     if word.pos_id != synset.pos_id:
         context["error"] = _("The word and synset have different parts-of-speech.")
-        return render(request, "editor/snippets/_sense_list.html", context)
+        return _render_with_summary(
+            request,
+            "editor/snippets/_sense_list.html",
+            context,
+            senses=context["senses"],
+        )
     _sense, created = Sense.objects.get_or_create(synset=synset, word=word)
     if not created:
         context["error"] = _(
             "The word '%(word)s' is already linked to this synset."
         ) % {"word": word.text}
-        return render(request, "editor/snippets/_sense_list.html", context)
+        return _render_with_summary(
+            request,
+            "editor/snippets/_sense_list.html",
+            context,
+            senses=context["senses"],
+        )
     _save_updated_synset(synset)
-    return render(request, "editor/snippets/_sense_list.html", context=context)
+    return _render_with_summary(
+        request, "editor/snippets/_sense_list.html", context, senses=context["senses"]
+    )
 
 
 @require_POST
@@ -437,10 +491,17 @@ def delete_sense_htmx(request, synset_pk, sense_pk):
         context["error"] = _(
             "Attempted to delete a sense not belonging to this synset."
         )
-        return render(request, "editor/snippets/_sense_list.html", context)
+        return _render_with_summary(
+            request,
+            "editor/snippets/_sense_list.html",
+            context,
+            senses=context["senses"],
+        )
     sense.delete()
     _save_updated_synset(synset)
-    return render(request, "editor/snippets/_sense_list.html", context=context)
+    return _render_with_summary(
+        request, "editor/snippets/_sense_list.html", context, senses=context["senses"]
+    )
 
 
 def _render_sense_item(request, synset, sense, failed_form=None, saved_pk=None):
@@ -455,7 +516,7 @@ def _render_sense_item(request, synset, sense, failed_form=None, saved_pk=None):
         # Briefly highlights the example just saved, which sorting may have moved
         "saved_pk": saved_pk,
     }
-    return render(request, "editor/snippets/_sense_item.html", context)
+    return _render_with_summary(request, "editor/snippets/_sense_item.html", context)
 
 
 @require_POST
@@ -565,16 +626,16 @@ def add_relation_htmx(request, pk):
     else:
         context = _synset_context(synset=synset)
         context["error"] = _("Invalid relation direction")
-        return render(request, "editor/snippets/_relations.html", context)
+        return _render_with_summary(request, "editor/snippets/_relations.html", context)
 
     if target_synset.wordnet_id != synset.wordnet_id:
         context = _synset_context(synset=synset)
         context["error"] = _("Synsets belong to different wordnets")
-        return render(request, "editor/snippets/_relations.html", context)
+        return _render_with_summary(request, "editor/snippets/_relations.html", context)
     if target_synset.pk == synset.pk:
         context = _synset_context(synset=synset)
         context["error"] = _("A synset cannot be related to itself")
-        return render(request, "editor/snippets/_relations.html", context)
+        return _render_with_summary(request, "editor/snippets/_relations.html", context)
 
     rel_type = get_object_or_404(RelationType, id=type_id)
     if Relation.objects.filter(
@@ -582,18 +643,18 @@ def add_relation_htmx(request, pk):
     ).exists():
         context = _synset_context(synset=synset)
         context["error"] = _("This relation already exists in the opposite direction")
-        return render(request, "editor/snippets/_relations.html", context)
+        return _render_with_summary(request, "editor/snippets/_relations.html", context)
     elif Relation.objects.filter(
         synset_from=synset_from, synset_to=synset_to, type=rel_type
     ).exists():
         context = _synset_context(synset=synset)
         context["error"] = _("This relation already exists")
-        return render(request, "editor/snippets/_relations.html", context)
+        return _render_with_summary(request, "editor/snippets/_relations.html", context)
     Relation.objects.create(synset_from=synset_from, synset_to=synset_to, type=rel_type)
     if synset.status != Synset.Status.DRAFT:
         synset.status = Synset.Status.DRAFT
         synset.save(update_fields=["status"])
-    return render(
+    return _render_with_summary(
         request,
         "editor/snippets/_relations.html",
         context=_synset_context(synset=synset),
@@ -618,7 +679,7 @@ def delete_relation_htmx(request, synset_pk, rel_pk):
         # different users/windows, or a retry due to an unreceived response.
         pass
     context.update(_synset_context(synset=synset))
-    return render(
+    return _render_with_summary(
         request,
         "editor/snippets/_relations.html",
         context=context,

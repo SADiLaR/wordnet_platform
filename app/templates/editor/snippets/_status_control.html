@@ -1,5 +1,8 @@
 {% load i18n %}
-<div id="status-control">
+<div
+    class="status-control"
+    {% if oob %}hx-swap-oob="outerHTML:.status-control"{% endif %}
+>
   <div class="btn-group btn-group-sm" role="group" aria-label="{% trans 'Synset status' %}">
     {% for value, label in synset.Status.choices %}
       <input type="radio"
@@ -11,7 +14,7 @@
              hx-post="{% url 'editor:synset_status_htmx' pk=synset.pk %}"
              hx-vals='{"new_status": "{{ value }}"}'
              hx-trigger="change"
-             hx-target="#status-control"
+             hx-target="closest .status-control"
              hx-swap="outerHTML">
       <label class="btn btn-status status-{{ value }}" for="status-{{ synset.pk }}-{{ value }}">
         {{ label }}
@@ -30,14 +33,14 @@
             class="btn btn-sm btn-warning me-2"
             hx-post="{% url 'editor:synset_status_htmx' pk=synset.pk %}"
             hx-vals='{"new_status": "{{ new_status }}", "force_save": "true"}'
-            hx-target="#status-control"
+            hx-target="closest .status-control"
             hx-swap="outerHTML">
       {% blocktrans with label=new_status_label %}Set to <b>{{ label }}</b> anyway{% endblocktrans %}
     </button>
     <button type="button"
             class="btn btn-sm btn-link text-secondary"
             hx-get="{% url 'editor:synset_status_htmx' pk=synset.pk %}"
-            hx-target="#status-control"
+            hx-target="closest .status-control"
             hx-swap="outerHTML">
       {% trans "Cancel" %}
     </button>

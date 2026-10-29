@@ -1,0 +1,13 @@
+{% load i18n editor %}
+{% comment %}
+  The parts of the synset page that summarise the synset: heading, tab title and status.
+  Views that change a synset send this after their own snippet (`_render_with_summary`),
+  so these parts never go stale. Each part is an out-of-band swap: HTMX finds the
+  matching element anywhere on the page and replaces it. A top-level <title> updates the
+  tab title.
+{% endcomment %}
+{% include "editor/snippets/_synset_heading.html" with oob=True %}
+{% include "editor/snippets/_status_control.html" with oob=True %}
+<title>
+  {{ senses|word_texts|join:", "|default:_("Synset (no words)") }} — {% trans "AfWN Editor" %}
+</title>

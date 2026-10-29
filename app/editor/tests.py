@@ -2,12 +2,13 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.test import SimpleTestCase, TestCase
+from django.test.html import parse_html
 from django.urls import reverse
 from django.utils.html import escape
 
 from editor.filters import SynsetFilter
 from editor.models import Assignment
-from editor.views import _copied_synsets, _guess_source_synset
+from editor.views import _copied_synsets, _guess_source_synset, _synset_examples
 from lex.models import (
     Language,
     PartOfSpeech,
@@ -346,16 +347,117 @@ class EditorViewTest(TestCase):
             response = self.client.get(self._get_queue_url())
         self.assertEqual(response.status_code, 200)
 
+    def _html_elements(self, root):
+        """Every element in the tree under `root` (from parse_html), root included."""
+        elements = [root]
+        while elements:
+            element = elements.pop()
+            yield element
+            elements.extend(c for c in element.children if not isinstance(c, str))
+
+    def _oob_element(self, response, selector):
+        """The one element in `response` that HTMX swaps out-of-band into `selector`."""
+        elements = [
+            element
+            for element in self._html_elements(parse_html(response.content.decode()))
+            if dict(element.attributes).get("hx-swap-oob") == f"outerHTML:{selector}"
+        ]
+        self.assertEqual(len(elements), 1, f"Out-of-band swaps into {selector}")
+        return elements[0]
+
+    def _element_with_class(self, response, css_class):
+        """The one element in `response` with `css_class`, or None if there's none."""
+        elements = [
+            element
+            for element in self._html_elements(parse_html(response.content.decode()))
+            if css_class in dict(element.attributes).get("class", "").split()
+        ]
+        self.assertLessEqual(len(elements), 1, f"Elements with class {css_class}")
+        return elements[0] if elements else None
+
+    def _text(self, element):
+        """The text of an element that holds only text."""
+        (text,) = element.children
+        self.assertIsInstance(text, str)
+        return text
+
+    def _heading(self, response):
+        """The text of the page's heading."""
+        heading = self._element_with_class(response, "synset-heading")
+        self.assertIsNotNone(heading, "No heading")
+        return self._text(heading)
+
+    def _oob_heading(self, response):
+        """The text of the out-of-band heading."""
+        return self._text(self._oob_element(response, ".synset-heading"))
+
+    def _oob_status(self, response):
+        """The status that the out-of-band status control shows as selected."""
+        control = self._oob_element(response, ".status-control")
+        checked = [
+            dict(element.attributes)
+            for element in self._html_elements(control)
+            if "checked" in dict(element.attributes)
+        ]
+        self.assertEqual(len(checked), 1, "Selected statuses")
+        # The radio buttons' ids end in their status, e.g. "status-3-draft".
+        # Read their value instead once they have one (they use hx-vals now).
+        return checked[0]["id"].rsplit("-", 1)[1]
+
     def test_synset_detail_existing_no_princeton(self):
-        with self.assertNumQueries(12):
+        # Four words: one more than display_name holds, which the heading lists in full
+        for text in ["delta", "alfa", "charlie", "bravo"]:
+            word = Word.objects.create(
+                text=text, pos=self.pos_noun, language=self.wordnet.language
+            )
+            Sense.objects.create(word=word, synset=self.synset_a)
+        self.synset_a.refresh_from_db()
+        self.assertEqual(self.synset_a.display_name, "alfa, bravo, charlie, ...")
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 8 concern checks (5 synset, 3 word)
+        # fetch relations
+        # fetch senses with words, used by both the heading and the word list
+        # fetch non-empty sense examples
+        # fetch non-empty synset examples
+        with self.assertNumQueries(13):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["synset"], self.synset_a)
+        self.assertEqual(self._heading(response), "alfa, bravo, charlie, delta")
+
+    def test_synset_examples(self):
+        # The old tool left synset examples with empty text; they're left out
+        SynsetExample.objects.create(synset=self.synset_a, text="")
+        SynsetExample.objects.create(synset=self.synset_a, text="Tweede voorbeeld")
+        SynsetExample.objects.create(synset=self.synset_a, text="Eerste voorbeeld")
+        SynsetExample.objects.create(synset=self.synset_b, text="Ander synset")
+        # Queries:
+        # synset examples of synset_a, non-empty, alphabetical
+        with self.assertNumQueries(1):
+            texts = [example.text for example in _synset_examples(self.synset_a)]
+        self.assertEqual(texts, ["Eerste voorbeeld", "Tweede voorbeeld"])
+
+    def test_synset_detail_no_synset_examples_section_when_all_empty(self):
+        SynsetExample.objects.create(synset=self.synset_a, text="")
+        self.assertTrue(self.synset_a.synsetexample_set.exists())
+        # Queries:
+        # fetch synset (with pos, wordnet, copied_from)
+        # 8 concern checks (5 synset, 3 word)
+        # fetch relations
+        # fetch senses (none, so no example prefetch)
+        # fetch non-empty synset examples (none)
+        # (no Princeton ID, so no source synset guess)
+        with self.assertNumQueries(12):
+            response = self.client.get(self._get_synset_detail_url(self.synset_a))
+        self.assertIsNone(self._element_with_class(response, "synset-examples"))
 
     def test_synset_detail_existing_with_princeton(self):
+        self.assertEqual(self.synset_f.display_name, "")
         with self.assertNumQueries(13):
             response = self.client.get(self._get_synset_detail_url(self.synset_f))
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._heading(response), "Synset (no words)")
 
     def test_synset_detail_non_existing(self):
         with self.assertNumQueries(1):
@@ -436,13 +538,18 @@ class EditorViewTest(TestCase):
                 Q(synset_from=self.synset_d) | Q(synset_to=self.synset_d)
             ).exists()
         )
+        # Each card shows its own synset's examples
+        SynsetExample.objects.create(synset=self.synset_e, text="Werkvoorbeeld")
+        SynsetExample.objects.create(synset=self.synset_d, text="Bronvoorbeeld")
         # Queries:
         # fetch synset_e (with pos, wordnet, language, and the same for copied_from)
         # 8 concern exists() checks (_synset_context)
         # relations of synset_e (_synset_context)
         # relations of synset_d (_source_synset_context)
         # senses of synset_e (none, so no example prefetch)
+        # synset examples of synset_e
         # senses of synset_d (none, so no example prefetch)
+        # synset examples of synset_d
         with self.assertNumQueries(15):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
@@ -453,6 +560,10 @@ class EditorViewTest(TestCase):
         self.assertContains(response, 'name="definition"', count=1)
         # Only the source card has no relations to show
         self.assertContains(response, "No relations.", count=1)
+        source_card = str(self._element_with_class(response, "source-synset"))
+        self.assertIn("Bronvoorbeeld", source_card)
+        self.assertNotIn("Werkvoorbeeld", source_card)
+        self.assertContains(response, "Werkvoorbeeld", count=1)
         # Only a link or unlink highlights the card
         self.assertNotContains(response, "just-saved")
         # No word search or relation form for the source synset
@@ -1041,6 +1152,7 @@ class EditorViewTest(TestCase):
         self.assertIsNotNone(response.context["synsets"])
 
     def test_add_relation_htmx_post_outgoing(self):
+        self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
         # fetch synset_a
         # fetch synset_b (target)
@@ -1052,7 +1164,8 @@ class EditorViewTest(TestCase):
         # status save
         # history (synset)
         # relations (_synset_context, synset reused from memory)
-        with self.assertNumQueries(18):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(19):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1067,6 +1180,7 @@ class EditorViewTest(TestCase):
                 synset_from=self.synset_a, synset_to=self.synset_b
             ).exists()
         )
+        self.assertEqual(self._oob_status(response), Synset.Status.DRAFT)
 
     def test_add_relation_htmx_post_incoming(self):
         # Queries:
@@ -1080,7 +1194,8 @@ class EditorViewTest(TestCase):
         # status save
         # history (synset)
         # relations (_synset_context, synset reused from memory)
-        with self.assertNumQueries(18):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(19):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1101,7 +1216,8 @@ class EditorViewTest(TestCase):
         # fetch synset_a
         # fetch synset_b (target)
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(11):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(12):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1118,7 +1234,8 @@ class EditorViewTest(TestCase):
         # fetch synset_a
         # fetch synset_d (target)
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(11):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(12):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1135,7 +1252,8 @@ class EditorViewTest(TestCase):
         # fetch synset_a
         # fetch synset_a (target, same pk)
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(11):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(12):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1155,7 +1273,8 @@ class EditorViewTest(TestCase):
         # fetch rel_type
         # circular exists() → True
         # relations (_synset_context, synset reused)
-        with self.assertNumQueries(13):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(14):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_b),
                 {
@@ -1175,6 +1294,8 @@ class EditorViewTest(TestCase):
             ),
             [self.rel2],
         )
+        self.assertEqual(self.synset_c.status, Synset.Status.STUB)
+        # Queries:
         # get synset
         # get relation
         # delete relation
@@ -1182,7 +1303,8 @@ class EditorViewTest(TestCase):
         # update synset status
         # create historical synset
         # ... full synset info
-        with self.assertNumQueries(15):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(16):
             response = self.client.post(
                 reverse(
                     "editor:delete_relation_htmx",
@@ -1195,6 +1317,7 @@ class EditorViewTest(TestCase):
         self.assertContains(response, "No relations.", count=1)
         # The response brings its own wrapper, which replaces the old one (outerHTML)
         self.assertContains(response, 'class="relations-section"', count=1)
+        self.assertEqual(self._oob_status(response), Synset.Status.DRAFT)
 
         # If someone tries again, it should be acceptable as well:
         response = self.client.post(
@@ -1249,6 +1372,8 @@ class EditorViewTest(TestCase):
         self.assertNotContains(response, self.word_1.text)
 
     def test_add_sense_htmx_success(self):
+        self.assertEqual(self.synset_a.display_name, "Toets")
+        self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
         # fetch synset (with wordnet, language, pos)
         # fetch word (with language, pos)
@@ -1272,6 +1397,11 @@ class EditorViewTest(TestCase):
         self.assertTrue(
             Sense.objects.filter(word=self.word_1, synset=self.synset_a).exists()
         )
+        self.assertEqual(self._oob_heading(response), "toets woord")
+        self.assertContains(
+            response, "<title>toets woord — AfWN Editor</title>", html=True
+        )
+        self.assertEqual(self._oob_status(response), Synset.Status.DRAFT)
 
     def test_add_sense_htmx_wrong_language(self):
         # Queries:
@@ -1339,6 +1469,9 @@ class EditorViewTest(TestCase):
         )
 
     def test_delete_sense_htmx_success(self):
+        # sense_2 is synset_c's only word
+        self.assertEqual(self.synset_c.display_name, "toets woord")
+        self.assertEqual(self.synset_c.status, Synset.Status.STUB)
         # Queries:
         # fetch synset
         # fetch sense
@@ -1358,6 +1491,8 @@ class EditorViewTest(TestCase):
         self.assertFalse(Sense.objects.filter(pk=self.sense_2.pk).exists())
         self.synset_c.refresh_from_db()
         self.assertEqual(self.synset_c.status, Synset.Status.DRAFT)
+        self.assertEqual(self._oob_heading(response), "Synset (no words)")
+        self.assertEqual(self._oob_status(response), Synset.Status.DRAFT)
 
     def test_delete_sense_htmx_wrong_synset(self):
         # sense_1 belongs to synset_b, not synset_a
@@ -1431,7 +1566,8 @@ class EditorViewTest(TestCase):
         # UPDATE synset (status → draft)
         # INSERT synset history
         # fetch non-empty examples (context)
-        with self.assertNumQueries(6):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(7):
             response = self.client.post(
                 self._get_add_sense_example_url(self.synset_c),
                 {"sense_pk": self.sense_2.pk, "text": "Nog 'n toets."},
@@ -1460,7 +1596,8 @@ class EditorViewTest(TestCase):
         # Queries:
         # fetch sense (with word, synset), scoped to synset
         # fetch non-empty examples (context)
-        with self.assertNumQueries(2):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(3):
             response = self.client.post(
                 self._get_add_sense_example_url(self.synset_c),
                 {"sense_pk": self.sense_2.pk, "text": "   "},
@@ -1499,7 +1636,8 @@ class EditorViewTest(TestCase):
         # UPDATE synset (status → draft)
         # INSERT synset history
         # fetch non-empty examples (context)
-        with self.assertNumQueries(6):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(7):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_b, self.sense_example),
                 {"text": "Hierdie is 'n beter toets."},
@@ -1522,7 +1660,8 @@ class EditorViewTest(TestCase):
         # Queries:
         # fetch example (with sense, word, synset), scoped to synset
         # fetch non-empty examples (context)
-        with self.assertNumQueries(2):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(3):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_b, self.sense_example),
                 {"text": "Hierdie is 'n toets.  "},
@@ -1540,7 +1679,8 @@ class EditorViewTest(TestCase):
         # Queries:
         # fetch example (with sense, word, synset), scoped to synset
         # fetch non-empty examples (context)
-        with self.assertNumQueries(2):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(3):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_b, self.sense_example),
                 {"text": ""},
@@ -1581,7 +1721,8 @@ class EditorViewTest(TestCase):
         # UPDATE synset (status → draft)
         # INSERT synset history
         # fetch non-empty examples (context)
-        with self.assertNumQueries(6):
+        # fetch senses with words (heading)
+        with self.assertNumQueries(7):
             response = self.client.post(
                 self._get_delete_sense_example_url(self.synset_b, self.sense_example)
             )
@@ -1589,6 +1730,7 @@ class EditorViewTest(TestCase):
         self.assertFalse(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
         self.synset_b.refresh_from_db()
         self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
+        self.assertEqual(self._oob_status(response), Synset.Status.DRAFT)
 
     def test_delete_sense_example_htmx_wrong_synset(self):
         # sense_example belongs to synset_b (through sense_1), not synset_c

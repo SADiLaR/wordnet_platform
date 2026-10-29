@@ -1,0 +1,5 @@
+{% load i18n editor %}
+<h1
+    class="synset-heading h4 mb-1"
+    {% if oob %}hx-swap-oob="outerHTML:.synset-heading"{% endif %}
+>{{ senses|word_texts|join:", "|default:_("Synset (no words)") }}</h1>

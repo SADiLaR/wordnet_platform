@@ -1,12 +1,14 @@
 {% extends "editor/base.html" %}
-{% load i18n %}
+{% load i18n editor %}
 
-{% block title %}{% trans "Synset detail" %} — {% trans "AfWN Editor" %}{% endblock %}
+{% block title %}
+  {{ senses|word_texts|join:", "|default:_("Synset (no words)") }} — {% trans "AfWN Editor" %}
+{% endblock %}
 
 {% block content %}
 
 <div class="mb-3">
-  <h1 class="h4 mb-1">{% trans "Synset detail" %}</h1>
+  {% include "editor/snippets/_synset_heading.html" %}
   <div class="d-flex flex-wrap gap-3 align-items-center text-secondary small mb-2">
     <div><span class="text-body-tertiary">{% trans "POS" %} </span>{{ synset.pos }}</div>
     <div><span class="text-body-tertiary">{% trans "Wordnet" %} </span>{{ synset.wordnet }}</div>

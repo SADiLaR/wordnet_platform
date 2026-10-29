@@ -1,10 +1,13 @@
 {% load i18n %}
 {% comment %}
-  The contents of a synset card's body: definition, words and relations. `synset` is
-  the synset shown. With `readonly`, nothing can be edited; the source synset card
-  uses this. The card itself, and its .card-body, are the caller's, so a card can add
-  its own content around these sections.
+  The contents of a synset card's body: words, definition, examples and relations.
+  `synset` is the synset shown, with its `senses`, `synset_examples` and `relations`.
+  With `readonly`, nothing can be edited; the source synset card uses this. The card
+  itself, and its .card-body, are the caller's, so a card can add its own content
+  around these sections.
 {% endcomment %}
+
+{% include "editor/snippets/_sense_list.html" %}
 
 {# TODO: review choice of uppercase #}
 <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Definition" %}</h3>
@@ -14,8 +17,6 @@
   {% include "editor/snippets/_definition_form.html" %}
 {% endif %}
 
-{% include "editor/snippets/_synsetexample.html" with examples=synset.synsetexample_set.all %}
-
-{% include "editor/snippets/_sense_list.html" %}
+{% include "editor/snippets/_synsetexample.html" %}
 
 {% include "editor/snippets/_relations.html" %}

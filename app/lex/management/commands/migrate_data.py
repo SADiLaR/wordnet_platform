@@ -22,6 +22,8 @@ from lex.models import (
     Wordnet,
 )
 
+BATCH_SIZE = 5_000
+
 
 class Command(BaseCommand):
     help = "Migrate legacy MySQL WordNetLoom data to new PostgreSQL schema"
@@ -247,6 +249,46 @@ class Command(BaseCommand):
         name = re.compile(r"\s*:\s*").sub("_", name)
 
         return relation_name_aliases.get(name, name)
+
+    def insert_batch(self, stage, model, batch):
+        """
+        batch: list of (row, obj, context) tuples.
+
+        Inserts the batch with one query. If that fails, retries row by row
+        so only the "bad rows" are logged and skipped.
+        """
+        try:
+            model.objects.bulk_create([obj for _, obj, _ in batch])
+            self.record_migrated(stage, len(batch))
+            return [(row, obj) for row, obj, _ in batch]
+
+        except Exception:
+            pass
+
+        inserted = []
+
+        for row, obj, context in batch:
+            # reset the object before retrying
+            obj.pk = None
+            obj._state.adding = True
+
+            try:
+                model.objects.bulk_create([obj])
+
+            except Exception as e:
+                self.log_skip(
+                    stage=stage,
+                    reason="db_upload_error",
+                    row=row,
+                    error=e,
+                    context=context,
+                )
+                continue
+
+            inserted.append((row, obj))
+        self.record_migrated(stage, len(inserted))
+
+        return inserted
 
     @staticmethod
     def split_word(text, language_id):

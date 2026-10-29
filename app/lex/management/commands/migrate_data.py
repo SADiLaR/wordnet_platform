@@ -50,8 +50,11 @@ class Command(BaseCommand):
 
             self.migrate_synsets(conn)
             self.migrate_words_and_senses(conn)
+            self.update_synset_display_names()
             self.migrate_examples(conn)
             self.migrate_relation_types_and_relations(conn)
+            self.update_relation_display_names()
+            self.update_synset_status()
 
             conn.close()
             self.close_migration_logging()
@@ -63,6 +66,49 @@ class Command(BaseCommand):
                 error=e,
             )
             raise
+
+    def update_synset_status(self):
+        """
+        Set status to "draft" for every synset with at least one concern.
+        All other synsets keep "complete".
+        """
+        print("Setting synset status from concerns...")
+        concerns_by_synset = defaultdict(set)
+
+        for concern in Synset.objects.concerns():
+            for synset_id in concern["qs"].values_list("id", flat=True):
+                concerns_by_synset[synset_id].add(concern["key"])
+
+        for concern in Word.objects.concerns():
+            synset_ids = Sense.objects.filter(word__in=concern["qs"]).values_list(
+                "synset_id", flat=True
+            )
+            for synset_id in synset_ids:
+                concerns_by_synset[synset_id].add(concern["key"])
+
+        for concern in Relation.objects.concerns():
+            for from_id, to_id in concern["qs"].values_list(
+                "synset_from_id", "synset_to_id"
+            ):
+                concerns_by_synset[from_id].add(concern["key"])
+                concerns_by_synset[to_id].add(concern["key"])
+
+        draft_ids = list(concerns_by_synset)
+
+        for i in range(0, len(draft_ids), BATCH_SIZE):
+            Synset.objects.filter(id__in=draft_ids[i : i + BATCH_SIZE]).update(
+                status="draft"
+            )
+
+        # Document every decision
+        path = self.log_directory / "synset_concerns.csv"
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(["synset_id", "concerns"])
+            for synset_id in sorted(draft_ids):
+                writer.writerow([synset_id, "; ".join(concerns_by_synset[synset_id])])
+
+        print(f"{len(draft_ids)} synsets set to draft")
 
     # ------------------------------------------------------------------
     # Logging
@@ -289,6 +335,60 @@ class Command(BaseCommand):
         self.record_migrated(stage, len(inserted))
 
         return inserted
+
+    @staticmethod
+    def update_synset_display_names():
+        """
+        The migration inserts synsets with bulk_create(), which skips save() so
+        update_display_name method is never triggered and every synset would keep
+        display_name = "".
+        """
+        print("Updating synset display names...")
+        count = 0
+
+        synsets = Synset.objects.filter(sense__isnull=False).distinct()
+        for count, synset in enumerate(synsets.iterator(), start=1):
+            synset.update_display_name()
+            if count % 10_000 == 0:
+                print(f"  Updated {count} synsets...")
+
+        print(f"Updated display names for {count} synsets")
+
+    def update_relation_display_names(self):
+        """
+        Fill Relation.display_name for every migrated relation.
+        The migration inserts relations with bulk_create(), which skips save() so
+        display_name is not updated.
+        """
+        print("Updating relation display names...")
+        count = 0
+
+        relations = Relation.objects.select_related(
+            "synset_from", "synset_to", "type"
+        ).iterator()
+
+        for count, relation in enumerate(relations, start=1):
+            try:
+                # Runs save() to build display_name without adding a history row
+                relation.save_without_historical_record()
+
+            except Exception as e:
+                self.log_skip(
+                    stage="relation_display_names",
+                    reason="display_name_not_saved",
+                    error=e,
+                    context={
+                        "relation_id": relation.pk,
+                        "display_name": relation.display_name,
+                        "length": len(relation.display_name),
+                    },
+                )
+                continue
+
+            if count % 50_000 == 0:
+                print(f"  Updated {count} relations...")
+
+        print(f"Updated display names for {count} relations")
 
     @staticmethod
     def split_word(text, language_id):

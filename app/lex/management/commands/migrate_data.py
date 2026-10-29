@@ -214,7 +214,164 @@ class Command(BaseCommand):
         if value is None:
             return ""
 
-        return " ".join(unescape(str(value)).split())
+        return " ".join(unescape(str(value)).split()).rstrip(",;:")
+
+    @staticmethod
+    def clean_example(value):
+        if value is None:
+            return ""
+
+        text = unescape(value)
+        text = re.compile('["“”]').sub("", text)
+        text = " ".join(text.split())
+
+        return text.strip(";: ")
+
+    @staticmethod
+    def normalize_relation_name(name):
+
+        relation_prefixes = ("awn_", "pwn_")
+        relation_name_aliases = {
+            "holo_mem": "holo_member",
+            "mero_mem": "mero_member",
+            "causes": "cause",
+            "sim": "similar_to",
+            "has_hyperonym": "hyper",
+        }
+
+        if name.lower().startswith(relation_prefixes):
+            name = name[4:]
+
+        name = re.compile(r"\s*:\s*").sub("_", name)
+
+        return relation_name_aliases.get(name, name)
+
+    def insert_batch(self, stage, model, batch):
+        """
+        batch: list of (row, obj, context) tuples.
+
+        Inserts the batch with one query. If that fails, retries row by row
+        so only the "bad rows" are logged and skipped.
+        """
+        try:
+            model.objects.bulk_create([obj for _, obj, _ in batch])
+            self.record_migrated(stage, len(batch))
+            return [(row, obj) for row, obj, _ in batch]
+
+        except Exception:
+            pass
+
+        inserted = []
+
+        for row, obj, context in batch:
+            # reset the object before retrying
+            obj.pk = None
+            obj._state.adding = True
+
+            try:
+                model.objects.bulk_create([obj])
+
+            except Exception as e:
+                self.log_skip(
+                    stage=stage,
+                    reason="db_upload_error",
+                    row=row,
+                    error=e,
+                    context=context,
+                )
+                continue
+
+            inserted.append((row, obj))
+        self.record_migrated(stage, len(inserted))
+
+        return inserted
+
+    @staticmethod
+    def update_synset_display_names():
+        """
+        The migration inserts synsets with bulk_create(), which skips save() so
+        update_display_name method is never triggered and every synset would keep
+        display_name = "".
+        """
+        print("Updating synset display names...")
+        count = 0
+
+        synsets = Synset.objects.filter(sense__isnull=False).distinct()
+        for count, synset in enumerate(synsets.iterator(), start=1):
+            synset.update_display_name()
+            if count % 10_000 == 0:
+                print(f"  Updated {count} synsets...")
+
+        print(f"Updated display names for {count} synsets")
+
+    def update_relation_display_names(self):
+        """
+        Fill Relation.display_name for every migrated relation.
+        The migration inserts relations with bulk_create(), which skips save() so
+        display_name is not updated.
+        """
+        print("Updating relation display names...")
+        count = 0
+
+        relations = Relation.objects.select_related(
+            "synset_from", "synset_to", "type"
+        ).iterator()
+
+        for count, relation in enumerate(relations, start=1):
+            try:
+                # Runs save() to build display_name without adding a history row
+                relation.save_without_historical_record()
+
+            except Exception as e:
+                self.log_skip(
+                    stage="relation_display_names",
+                    reason="display_name_not_saved",
+                    error=e,
+                    context={
+                        "relation_id": relation.pk,
+                        "display_name": relation.display_name,
+                        "length": len(relation.display_name),
+                    },
+                )
+                continue
+
+            if count % 50_000 == 0:
+                print(f"  Updated {count} relations...")
+
+        print(f"Updated display names for {count} relations")
+
+    @staticmethod
+    def split_word(text, language_id):
+        """
+        Only split when the word uses exactly one kind of separator
+        ("/", "," or ";") and has no brackets. English words are excluded.
+        """
+        word_separators = "/,;"
+        if language_id == "ENG":
+            return [text], None
+
+        found = [sep for sep in word_separators if sep in text]
+        if not found:
+            return [text], None
+
+        if len(found) > 1:
+            return [text], "not_split_mixed_separators"
+        if "(" in text or ")" in text:
+            return [text], "not_split_brackets"
+
+        parts = []
+        for part in text.split(found[0]):
+            part = part.strip()
+
+            if part and part not in parts:
+                parts.append(part)
+
+        # Keep the original text if it can't be split into 2 distinct parts
+        # (e.g. "/", "cat/", "cat/cat").
+        if len(parts) < 2:
+            return [text], None
+
+        return parts, "split_word"
 
     # ------------------------------------------------------------------
     # Languages
@@ -538,21 +695,53 @@ class Command(BaseCommand):
 
         migrated_words = 0
         skipped_words = 0
+        entries = []
+        splits = []
 
         migrated_senses = 0
         skipped_senses = 0
 
         word_txt_max = Word._meta.get_field("text").max_length
+        for row in rows:
+            word_text = self.clean_text(row["word_text"])
+            parts, reason = self.split_word(word_text, row["language_id"])
+
+            if reason:
+                splits.append([row["language_id"], word_text, reason])
+
+            for part in parts:
+                entries.append((row, part))
+
+        def word_key(row, text):
+            return (
+                text,
+                row["language_id"],
+                self.pos_id_map.get(row["pos"]),
+            )
 
         # ---------------------------------------------------------
         # MIGRATE WORDS
         # ---------------------------------------------------------
-        for row in rows:
+        seen_word_keys = set()
+        word_batch = []
+
+        def flush_words():
+            nonlocal migrated_words, skipped_words
+
+            inserted = self.insert_batch("words", Word, word_batch)
+
+            for _, word in inserted:
+                self.word_id_map[(word.text, word.language_id, word.pos_id)] = word.id
+
+            migrated_words += len(inserted)
+            skipped_words += len(word_batch) - len(inserted)
+            word_batch.clear()
+
+            print(f"  Migrated {migrated_words} words...")
+
+        for row, part in entries:
             old_word_id = row["old_word_id"]
-            word_text = self.clean_text(row["word_text"])
-            language_id = row["language_id"]
-            pos_value = row["pos"]
-            pos_id = self.pos_id_map.get(pos_value)
+            word_text, language_id, pos_id = word_key(row, part)
 
             if not word_text:
                 skipped_words += 1
@@ -581,48 +770,60 @@ class Command(BaseCommand):
                 )
                 continue
 
-            try:
-                word = Word.objects.create(
-                    text=word_text,
-                    language_id=language_id,
-                    pos_id=pos_id,
-                )
+            key = word_key(row, part)
+            # Make sure not to upload duplicated words after text has been cleaned
+            if key in seen_word_keys:
+                continue
 
-            except Exception as e:
-                skipped_words += 1
+            seen_word_keys.add(key)
 
-                self.log_skip(
-                    stage="words",
-                    reason="word_db_upload_error",
-                    row=row,
-                    error=e,
-                    context={
+            word_batch.append(
+                (
+                    row,
+                    Word(text=word_text, language_id=language_id, pos_id=pos_id),
+                    {
                         "old_word_id": old_word_id,
                         "cleaned_word_text": word_text,
                         "language_id": language_id,
                         "pos_id": pos_id,
                     },
                 )
-                continue
+            )
 
-            self.word_id_map[old_word_id] = word.id
+            if len(word_batch) >= BATCH_SIZE:
+                flush_words()
 
-            migrated_words += 1
-            self.record_migrated("words")
-
-            if migrated_words % 10_000 == 0:
-                print(f"  Migrated {migrated_words} words...")
+        if word_batch:
+            flush_words()
 
         # ---------------------------------------------------------
         # MIGRATE SENSES
         # ---------------------------------------------------------
-        for row in rows:
+        sense_batch = []
+
+        def flush():
+            nonlocal migrated_senses, skipped_senses
+
+            inserted = self.insert_batch("senses", Sense, sense_batch)
+
+            for row, sense in inserted:
+                self.sense_id_map.setdefault(row["old_sense_id"], sense.id)
+
+            migrated_senses += len(inserted)
+            skipped_senses += len(sense_batch) - len(inserted)
+            sense_batch.clear()
+
+            print(f"  Migrated {migrated_senses} senses...")
+
+        seen_senses = set()
+
+        for row, part in entries:
             old_sense_id = row["old_sense_id"]
             old_synset_id = row["old_synset_id"]
             old_word_id = row["old_word_id"]
-            comment = comment = row["comment"] or ""
+            comment = row["comment"] or ""
             new_synset_id = self.synset_id_map.get(old_synset_id)
-            new_word_id = self.word_id_map.get(old_word_id)
+            new_word_id = self.word_id_map.get(word_key(row, part))
 
             if new_word_id is None:
                 skipped_senses += 1
@@ -646,20 +847,28 @@ class Command(BaseCommand):
                 )
                 continue
 
-            try:
-                sense = Sense.objects.create(
-                    word_id=new_word_id, synset_id=new_synset_id, comment=comment
-                )
+            sense_key = (new_synset_id, new_word_id)
 
-            except Exception as e:
+            if sense_key in seen_senses:
                 skipped_senses += 1
 
                 self.log_skip(
                     stage="senses",
-                    reason="sense_db_upload_error",
+                    reason="duplicate_sense",
                     row=row,
-                    error=e,
-                    context={
+                    context={"new_synset_id": new_synset_id, "word_text": part},
+                )
+                continue
+
+            seen_senses.add(sense_key)
+
+            sense_batch.append(
+                (
+                    row,
+                    Sense(
+                        word_id=new_word_id, synset_id=new_synset_id, comment=comment
+                    ),
+                    {
                         "old_sense_id": old_sense_id,
                         "old_synset_id": old_synset_id,
                         "new_synset_id": new_synset_id,
@@ -667,16 +876,13 @@ class Command(BaseCommand):
                         "new_word_id": new_word_id,
                     },
                 )
-                continue
+            )
 
-            self.sense_id_map[old_sense_id] = sense.id
+            if len(sense_batch) >= BATCH_SIZE:
+                flush()
 
-            if sense:
-                migrated_senses += 1
-                self.record_migrated("senses")
-
-            if migrated_senses > 0 and migrated_senses % 10_000 == 0:
-                print(f"  Migrated {migrated_senses} senses...")
+        if sense_batch:
+            flush()
 
         print("Words:")
         print(f"  Migrated: {migrated_words}")
@@ -685,6 +891,12 @@ class Command(BaseCommand):
         print("Senses:")
         print(f"  Migrated:   {migrated_senses}")
         print(f"  Skipped:    {skipped_senses}")
+        # Write split words to file
+        path = self.log_directory / "word_splits.csv"
+        with path.open("w") as f:
+            writer = csv.writer(f)
+            writer.writerow(["language", "original_text", "reason"])
+            writer.writerows(splits)
 
     # ------------------------------------------------------------------
     # Examples

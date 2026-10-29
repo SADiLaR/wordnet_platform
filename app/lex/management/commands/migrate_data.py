@@ -1,7 +1,7 @@
 import csv
 import json
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
@@ -228,6 +228,25 @@ class Command(BaseCommand):
         text = " ".join(text.split())
 
         return text.strip(";: ")
+
+    @staticmethod
+    def normalize_relation_name(name):
+
+        relation_prefixes = ("awn_", "pwn_")
+        relation_name_aliases = {
+            "holo_mem": "holo_member",
+            "mero_mem": "mero_member",
+            "causes": "cause",
+            "sim": "similar_to",
+            "has_hyperonym": "hyper",
+        }
+
+        if name.lower().startswith(relation_prefixes):
+            name = name[4:]
+
+        name = re.compile(r"\s*:\s*").sub("_", name)
+
+        return relation_name_aliases.get(name, name)
 
     @staticmethod
     def split_word(text, language_id):
@@ -919,6 +938,8 @@ class Command(BaseCommand):
         print("Migrating relation types and relations...")
 
         self.relation_type_id_map = {}
+        relation_type_name_map = {}
+        merged_names = defaultdict(set)
 
         migrated_relation_types = 0
         migrated_relations = 0
@@ -949,9 +970,9 @@ class Command(BaseCommand):
 
         for row in relation_type_rows:
             old_relation_type_id = row["old_relation_type_id"]
-            relation_type_name = row["relation_type_name"]
+            original_name = row["relation_type_name"]
 
-            if not relation_type_name:
+            if not original_name:
                 skipped += 1
 
                 self.log_skip(
@@ -961,10 +982,13 @@ class Command(BaseCommand):
                 )
                 continue
 
-            if relation_type_name.upper().startswith(("AWN_", "PWN_")):
-                relation_type_name = relation_type_name[4:]
+            relation_type_name = self.normalize_relation_name(original_name)
+            merged_names[relation_type_name].add(original_name)
+            existing_id = relation_type_name_map.get(relation_type_name)
 
-            relation_type_name = relation_type_name.lower()
+            if existing_id is not None:
+                self.relation_type_id_map[old_relation_type_id] = existing_id
+                continue
 
             try:
                 relation_type = RelationType.objects.create(name=relation_type_name)
@@ -981,11 +1005,17 @@ class Command(BaseCommand):
                 )
                 continue
 
+            relation_type_name_map[relation_type_name] = relation_type.id
             self.relation_type_id_map[old_relation_type_id] = relation_type.id
 
             if relation_type:
                 migrated_relation_types += 1
                 self.record_migrated("relation_types")
+
+        # Show which differently spelled names were merged
+        for name, originals in sorted(merged_names.items()):
+            if len(originals) > 1:
+                print(f"  {name} <- {', '.join(sorted(originals))}")
 
         with conn.cursor() as cursor:
             cursor.execute(
@@ -1009,11 +1039,33 @@ class Command(BaseCommand):
             )
             relation_rows = cursor.fetchall()
 
+        seen_relations = set()
+        batch = []
+
+        def flush():
+            nonlocal migrated_relations, skipped
+
+            inserted = self.insert_batch("relations", Relation, batch)
+
+            migrated_relations += len(inserted)
+            skipped += len(batch) - len(inserted)
+            batch.clear()
+
+            print(f"  Migrated {migrated_relations} relations...")
+
         for row in relation_rows:
             old_synset_from_id = row["old_synset_from_id"]
             old_synset_to_id = row["old_synset_to_id"]
             old_relation_type_id = row["old_relation_type_id"]
-            display_name = row["display_name"]
+
+            # Same normalisation as the type name, so a relation of type
+            # holo_member does not keep the display name "holo_mem".
+            display_name = (
+                self.normalize_relation_name(row["display_name"])
+                if row["display_name"] is not None
+                else None
+            )
+
             new_synset_from_id = self.synset_id_map.get(old_synset_from_id)
             new_synset_to_id = self.synset_id_map.get(old_synset_to_id)
             new_relation_type_id = self.relation_type_id_map.get(old_relation_type_id)
@@ -1051,36 +1103,47 @@ class Command(BaseCommand):
                 )
                 continue
 
-            try:
-                relation = Relation.objects.create(
-                    synset_from_id=new_synset_from_id,
-                    synset_to_id=new_synset_to_id,
-                    type_id=new_relation_type_id,
-                    display_name=display_name,
-                )
+            relation_key = (new_synset_from_id, new_synset_to_id, new_relation_type_id)
 
-            except Exception as e:
+            if relation_key in seen_relations:
                 skipped += 1
 
                 self.log_skip(
                     stage="relations",
-                    reason="db_upload_error",
+                    reason="duplicate_relation",
                     row=row,
-                    error=e,
                     context={
+                        "new_synset_from_id": new_synset_from_id,
+                        "new_synset_to_id": new_synset_to_id,
+                        "new_relation_type_id": new_relation_type_id,
+                    },
+                )
+                continue
+
+            seen_relations.add(relation_key)
+
+            batch.append(
+                (
+                    row,
+                    Relation(
+                        synset_from_id=new_synset_from_id,
+                        synset_to_id=new_synset_to_id,
+                        type_id=new_relation_type_id,
+                    ),
+                    {
                         "new_synset_from_id": new_synset_from_id,
                         "new_synset_to_id": new_synset_to_id,
                         "new_relation_type_id": new_relation_type_id,
                         "display_name": display_name,
                     },
                 )
-                continue
+            )
 
-            if relation:
-                migrated_relations += 1
-                self.record_migrated("relations")
-            if migrated_relations > 0 and migrated_relations % 10_000 == 0:
-                print(f"  Migrated {migrated_relations} relations...")
+            if len(batch) >= BATCH_SIZE:
+                flush()
+
+        if batch:
+            flush()
 
         print(
             f"Migrated {migrated_relation_types} relation types and ",

@@ -187,13 +187,10 @@ def _synset_context(pk=None, synset=None):
     readonly = synset.wordnet_id == settings.SOURCE_WORDNET_ID
     concerns = []
     if not readonly:
-        for concern in Synset.objects.concerns():
-            if concern["qs"].filter(pk=pk).exists():
-                concerns.append(concern)
-
-        for concern in Word.objects.concerns():
-            if concern["qs"].filter(sense__synset=synset).exists():
-                concerns.append(concern)
+        for model in (Synset, Word, Relation):
+            for concern in model.objects.concerns():
+                if concern["synsets"].filter(pk=pk).exists():
+                    concerns.append(concern)
 
     senses = _senses(synset)
 

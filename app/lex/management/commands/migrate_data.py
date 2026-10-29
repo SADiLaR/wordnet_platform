@@ -1,7 +1,9 @@
 import csv
 import json
+import re
 from collections import Counter
 from datetime import UTC, datetime
+from difflib import SequenceMatcher
 from html import unescape
 from pathlib import Path
 
@@ -61,6 +63,45 @@ class Command(BaseCommand):
             )
             raise
 
+        finally:
+            conn.close()
+            self.close_migration_logging()
+
+    def update_synset_status(self):
+        """
+        Set status to "draft" for every synset with at least one concern.
+        All other synsets keep "complete".
+        """
+        print("Setting synset status from concerns...")
+        concerns_by_synset = defaultdict(set)
+
+        for model in (Synset, Word, Relation):
+            for concern in model.objects.concerns():
+                for synset_id in concern["synsets"].values_list("id", flat=True):
+                    concerns_by_synset[synset_id].add(concern["key"])
+
+        # A migration decision, not an app concern: an example was copied to
+        # every part of a split word, and an editor should remove wrong copies.
+        for synset_id in self.split_example_synset_ids:
+            concerns_by_synset[synset_id].add("split-word-example")
+
+        draft_ids = list(concerns_by_synset)
+
+        for i in range(0, len(draft_ids), BATCH_SIZE):
+            Synset.objects.filter(id__in=draft_ids[i : i + BATCH_SIZE]).update(
+                status="draft"
+            )
+
+        # Document every decision
+        path = self.log_directory / "synset_concerns.csv"
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(["synset_id", "concerns"])
+            for synset_id in sorted(draft_ids):
+                writer.writerow([synset_id, "; ".join(concerns_by_synset[synset_id])])
+
+        print(f"{len(draft_ids)} synsets set to draft")
+
     # ------------------------------------------------------------------
     # Logging
     # ------------------------------------------------------------------
@@ -97,6 +138,8 @@ class Command(BaseCommand):
 
         self.skip_counts = Counter()
         self.migrated_counts = Counter()
+        # Rows that are extra copies
+        self.extra_counts = Counter()
 
         self.total_logged_skips = 0
         self.total_migrated = 0
@@ -182,6 +225,11 @@ class Command(BaseCommand):
             for (stage, reason), count in sorted(self.skip_counts.items()):
                 summary_writer.writerow(
                     {"stage": stage, "reason": reason, "count": count}
+                )
+
+            for (stage, reason), count in sorted(self.extra_counts.items()):
+                summary_writer.writerow(
+                    {"stage": stage, "reason": f"{reason}", "count": count}
                 )
 
             summary_writer.writerow(
@@ -341,6 +389,18 @@ class Command(BaseCommand):
         print(f"Updated display names for {count} relations")
 
     @staticmethod
+    def clean_example(value):
+        if value is None:
+            return ""
+
+        text = unescape(str(value))
+        text = re.compile('["“”]').sub("", text)
+        text = re.sub(r"\\[nrt]", " ", text)
+        text = " ".join(text.split())
+
+        return text.strip(";: ")
+
+    @staticmethod
     def split_word(text, language_id):
         """
         Only split when the word uses exactly one kind of separator
@@ -372,6 +432,37 @@ class Command(BaseCommand):
             return [text], None
 
         return parts, "split_word"
+
+    @staticmethod
+    def word_in_sentence(word, sentence, threshold=0.75, min_overlap=4):
+        word_re = re.compile(r"[-\w']+")
+
+        word_tokens = word_re.findall(word.lower())
+        sentence_tokens = word_re.findall(sentence.lower())
+
+        # Exact word, or exact phrase
+        size = len(word_tokens)
+        if all(token in sentence_tokens for token in word_tokens):
+            return "yes"
+
+        for word_token in word_tokens:
+            if len(word_token) < min_overlap:
+                continue
+
+            for sentence_token in sentence_tokens:
+                match = SequenceMatcher(
+                    None,
+                    word_token,
+                    sentence_token,
+                    autojunk=False,
+                ).find_longest_match(0, len(word_token), 0, len(sentence_token))
+                if (
+                    match.size >= min_overlap
+                    and match.size / len(word_token) >= threshold
+                ):
+                    return "maybe"
+
+        return "no"
 
     # ------------------------------------------------------------------
     # Languages
@@ -654,8 +745,8 @@ class Command(BaseCommand):
     # Words and senses
     # ------------------------------------------------------------------
     def migrate_words_and_senses(self, conn):
-        self.sense_id_map = {}
         self.word_id_map = {}
+        self.split_words = {}
 
         with conn.cursor() as cursor:
             cursor.execute(
@@ -705,6 +796,9 @@ class Command(BaseCommand):
         for row in rows:
             word_text = self.clean_text(row["word_text"])
             parts, reason = self.split_word(word_text, row["language_id"])
+
+            if len(parts) > 1:
+                self.split_words[row["old_sense_id"]] = word_text
 
             if reason:
                 splits.append([row["language_id"], word_text, reason])
@@ -800,6 +894,8 @@ class Command(BaseCommand):
         # MIGRATE SENSES
         # ---------------------------------------------------------
         sense_batch = []
+        self.sense_key_ids = {}
+        old_sense_keys = defaultdict(set)
 
         def flush():
             nonlocal migrated_senses, skipped_senses
@@ -807,7 +903,7 @@ class Command(BaseCommand):
             inserted = self.insert_batch("senses", Sense, sense_batch)
 
             for row, sense in inserted:
-                self.sense_id_map.setdefault(row["old_sense_id"], sense.id)
+                self.sense_key_ids[(sense.synset_id, sense.word_id)] = sense.id
 
             migrated_senses += len(inserted)
             skipped_senses += len(sense_batch) - len(inserted)
@@ -848,6 +944,7 @@ class Command(BaseCommand):
                 continue
 
             sense_key = (new_synset_id, new_word_id)
+            old_sense_keys[old_sense_id].add((sense_key, part))
 
             if sense_key in seen_senses:
                 skipped_senses += 1
@@ -883,6 +980,16 @@ class Command(BaseCommand):
 
         if sense_batch:
             flush()
+        # old sense id: [(new sense id, new synset id, word), ...]
+        # An old sense has as many targets as the number of parts its word was split into
+        self.sense_targets = {
+            old_sense_id: [
+                (self.sense_key_ids[key], key[0], part)
+                for key, part in keys
+                if key in self.sense_key_ids
+            ]
+            for old_sense_id, keys in old_sense_keys.items()
+        }
 
         print("Words:")
         print(f"  Migrated: {migrated_words}")
@@ -904,97 +1011,169 @@ class Command(BaseCommand):
 
     def migrate_examples(self, conn):
         print("Migrating examples...")
-
-        tables = {"synset": SynsetExample, "sense": SenseExample}
-        id_maps = {
-            "synset": self.synset_id_map,
-            "sense": self.sense_id_map,
+        self.split_example_rows = []
+        self.split_example_synset_ids = set()
+        # Give synset same shape as sense target (self.sense_targets)
+        synset_targets = {
+            old_id: [(new_id, new_id, None)]
+            for old_id, new_id in self.synset_id_map.items()
         }
 
-        for table, obj in tables.items():
-            id_map = id_maps[table]
-            query = f"""
-                    SELECT DISTINCT
-                        s.id AS old_{table}_id,
-                        tse.example AS example_text
+        sources = (
+            ("synset", SynsetExample, synset_targets),
+            ("sense", SenseExample, self.sense_targets),
+        )
 
-                    FROM tbl_{table}_examples tse
+        for table, model, id_map in sources:
+            self.migrate_example_table(conn, table, model, id_map)
 
-                    LEFT JOIN tbl_{table} s
-                        ON s.id = tse.{table}_attribute_id
-                    """
+        path = self.log_directory / "review_split_examples.csv"
+        with path.open("w") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "synset_id",
+                    "original_word",
+                    "word",
+                    "sense_id",
+                    "contains_word",
+                    "example",
+                ]
+            )
+            writer.writerows(self.split_example_rows)
 
-            with conn.cursor() as cursor:
-                cursor.execute(query)
-                rows = cursor.fetchall()
+    def migrate_example_table(self, conn, table, model, id_map):
+        stage = f"examples_{table}"
 
-            migrated = 0
-            skipped = 0
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    tse.id AS old_example_id,
+                    tse.{table}_attribute_id AS old_{table}_id,
+                    tse.example AS example_text
 
-            # Get the maximum number of characters allowed for the Example field.
-            example_max_len = obj._meta.get_field("text").max_length
+                FROM tbl_{table}_examples tse
 
-            for row in rows:
-                old_id = row[f"old_{table}_id"]
-                example_text = self.clean_text(row["example_text"])
-                new_id = id_map.get(old_id)
+                """
+            )
+            rows = cursor.fetchall()
 
-                if new_id is None:
-                    skipped += 1
+        # Get the maximum number of characters allowed for the Example field.
+        example_max_len = model._meta.get_field("text").max_length
+        migrated = 0
+        skipped = 0
+        seen = set()
+        batch = []
 
-                    self.log_skip(
-                        stage=f"examples_{table}",
-                        reason=f"{table}_not_migrated",
-                        row=row,
-                        context={f"old_{table}_id": old_id},
+        def flush():
+            nonlocal migrated, skipped
+
+            inserted = self.insert_batch(stage, model, batch)
+
+            migrated += len(inserted)
+            skipped += len(batch) - len(inserted)
+            batch.clear()
+
+            print(f"  Migrated {migrated} {table} examples...")
+
+        for row in rows:
+            old_id = row[f"old_{table}_id"]
+            example_text = self.clean_example(row["example_text"])
+
+            if not example_text:
+                skipped += 1
+
+                self.log_skip(
+                    stage=stage,
+                    reason="empty_example",
+                    row=row,
+                    context={f"old_{table}_id": old_id},
+                )
+                continue
+
+            # [(sense/synset id, synset id, word), ...]
+            targets = id_map.get(old_id)
+
+            if targets is None:
+                skipped += 1
+
+                self.log_skip(
+                    stage=stage,
+                    reason=f"{table}_not_migrated",
+                    row=row,
+                    context={f"old_{table}_id": old_id},
+                )
+                continue
+
+            if len(example_text) > example_max_len:
+                skipped += 1
+
+                self.log_skip(
+                    stage=stage,
+                    reason="example_text_too_long",
+                    row=row,
+                    context={
+                        f"new_{table}_id": targets[0],
+                        "example_length": len(example_text),
+                        "maximum_length": example_max_len,
+                        "cleaned_example_text": example_text,
+                    },
+                )
+                continue
+            # check if synset/sense id + example_text already seen
+            new_targets = [
+                target for target in targets if (target[0], example_text) not in seen
+            ]
+
+            if not new_targets:
+                skipped += 1
+                self.log_skip(
+                    stage=stage,
+                    reason="duplicate_after_cleaning",
+                    row=row,
+                    context={"cleaned_example_text": example_text},
+                )
+                continue
+
+            for target_id, _, _ in new_targets:
+                seen.add((target_id, example_text))
+                batch.append(
+                    (
+                        row,
+                        model(**{f"{table}_id": target_id, "text": example_text}),
+                        {"new_id": target_id, "example": example_text},
                     )
-                    continue
+                )
 
-                if len(example_text) > example_max_len:
-                    skipped += 1
+            # Log number of extra rows created for examples_sense
+            if len(new_targets) > 1:
+                self.extra_counts[(stage, "extra_copies_from_split")] += (
+                    len(new_targets) - 1
+                )
 
-                    self.log_skip(
-                        stage=f"examples_{table}",
-                        reason="example_text_too_long",
-                        row=row,
-                        context={
-                            f"new_{table}_id": new_id,
-                            "example_length": len(example_text),
-                            "maximum_length": example_max_len,
-                            "cleaned_example_text": example_text,
-                        },
+            # Copied to several words: flag it for review.
+            if table == "sense" and len(targets) > 1 and old_id in self.split_words:
+                for sense_id, synset_id, part in targets:
+                    self.split_example_rows.append(
+                        [
+                            synset_id,
+                            self.split_words[old_id],
+                            part,
+                            sense_id,
+                            self.word_in_sentence(part, example_text),
+                            example_text,
+                        ]
                     )
-                    continue
+                    self.split_example_synset_ids.add(synset_id)
 
-                try:
-                    example = obj.objects.create(
-                        **{f"{table}_id": new_id, "text": example_text}
-                    )
+            if len(batch) >= BATCH_SIZE:
+                flush()
 
-                except Exception as e:
-                    skipped += 1
+        if batch:
+            flush()
 
-                    self.log_skip(
-                        stage=f"examples_{table}",
-                        reason="db_upload_error",
-                        row=row,
-                        error=e,
-                        context={
-                            "new_id": new_id,
-                            "example": example_text,
-                            "example_length": len(example_text),
-                        },
-                    )
-                    continue
-
-                if example:
-                    migrated += 1
-                    self.record_migrated(f"examples_{table}")
-
-                if migrated > 0 and migrated % 10_000 == 0:
-                    print(f"  Migrated {migrated} {table} examples...")
-
-            print(f"Migrated {migrated} examples; skipped {skipped}")
+        print(f"Migrated {migrated} {table} examples; skipped {skipped}")
 
     # ------------------------------------------------------------------
     # Relation types and relations

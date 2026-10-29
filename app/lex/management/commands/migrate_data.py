@@ -364,7 +364,20 @@ class Command(BaseCommand):
                     MAX(tsa.princeton_id) AS princeton_id,
 
                     MIN(LOWER(tals.value)) AS pos,
-                    COUNT(DISTINCT LOWER(tals.value)) AS pos_count
+                    COUNT(DISTINCT LOWER(tals.value)) AS pos_count,
+                    COUNT(DISTINCT old_sense.id) AS sense_count,
+                    EXISTS (
+                        SELECT 1
+                        FROM tbl_synset_examples e
+                        WHERE e.synset_attribute_id = ts.id
+                        AND TRIM(e.example) <> ''
+                    ) AS has_examples,
+                    EXISTS (
+                        SELECT 1
+                        FROM tbl_synset_relation r
+                        WHERE r.parent_synset_id = ts.id
+                        OR r.child_synset_id = ts.id
+                    ) AS has_relations
 
                 FROM tbl_synset ts
 
@@ -375,8 +388,7 @@ class Command(BaseCommand):
                     ON old_sense.synset_id = ts.id
 
                 LEFT JOIN tbl_part_of_speech tpos
-                    ON tpos.id =
-                       old_sense.part_of_speech_id
+                    ON tpos.id = old_sense.part_of_speech_id
 
                 LEFT JOIN
                     tbl_application_localised_string tals
@@ -391,6 +403,20 @@ class Command(BaseCommand):
 
         migrated = 0
         skipped = 0
+        batch = []
+
+        def flush():
+            nonlocal migrated, skipped
+            inserted = self.insert_batch("synsets", Synset, batch)
+
+            for row, synset in inserted:
+                self.synset_id_map[row["old_synset_id"]] = synset.id
+
+            migrated += len(inserted)
+            skipped += len(batch) - len(inserted)
+            batch.clear()
+
+            print(f"  Migrated {migrated} synsets...")
 
         for row in rows:
             old_synset_id = row["old_synset_id"]
@@ -403,6 +429,25 @@ class Command(BaseCommand):
             if pos_count == 0 or not pos_value:
                 pos_value = "unknown"
 
+            has_content = (
+                definition
+                or row["sense_count"] > 0
+                or row["princeton_id"]
+                or row["has_examples"]
+                or row["has_relations"]
+            )
+
+            if not has_content:
+                skipped += 1
+
+                self.log_skip(
+                    stage="synsets",
+                    reason="empty_synset",
+                    row=row,
+                    context={"old_synset_id": old_synset_id},
+                )
+                continue
+
             # NOTE:
             # The current migration assumes that each synset has only one POS.
             # Need to discuss how to handle cases with multiple POS and update.
@@ -411,25 +456,19 @@ class Command(BaseCommand):
 
             pos_id = self.pos_id_map.get(pos_value)
 
-            try:
-                synset = Synset.objects.create(
-                    wordnet_id=self.wordnet_id_map[old_lexicon_id],
-                    definition=definition,
-                    status="complete",
-                    display_name="",
-                    pos_id=pos_id,
-                    lexicalised=True,
-                    princeton_id=princeton_id,
-                )
-            except Exception as e:
-                skipped += 1
-
-                self.log_skip(
-                    stage="synsets",
-                    reason="db_upload_error",
-                    row=row,
-                    error=e,
-                    context={
+            batch.append(
+                (
+                    row,
+                    Synset(
+                        wordnet_id=self.wordnet_id_map[old_lexicon_id],
+                        definition=definition,
+                        status="complete",
+                        display_name="",
+                        pos_id=pos_id,
+                        lexicalised=True,
+                        princeton_id=princeton_id,
+                    ),
+                    {
                         "old_synset_id": old_synset_id,
                         "wordnet_id": self.wordnet_id_map[old_lexicon_id],
                         "pos_id": pos_id,
@@ -438,15 +477,13 @@ class Command(BaseCommand):
                         "princeton_id": princeton_id,
                     },
                 )
-                continue
+            )
 
-            self.synset_id_map[old_synset_id] = synset.id
+            if len(batch) >= BATCH_SIZE:
+                flush()
 
-            migrated += 1
-            self.record_migrated("synsets")
-
-            if migrated % 10_000 == 0:
-                print(f"  Migrated {migrated} synsets...")
+        if batch:
+            flush()
 
         print(f"Migrated {migrated} synsets; skipped {skipped}")
 

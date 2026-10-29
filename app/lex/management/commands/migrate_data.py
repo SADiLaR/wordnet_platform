@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 from collections import Counter
 from datetime import UTC, datetime
 from html import unescape
@@ -215,6 +216,18 @@ class Command(BaseCommand):
             return ""
 
         return " ".join(unescape(str(value)).split())
+
+    @staticmethod
+    def clean_example(value):
+        if value is None:
+            return ""
+
+        text = unescape(str(value))
+        text = re.compile('["“”]').sub("", text)
+        text = re.sub(r"\\[nrt]", " ", text)
+        text = " ".join(text.split())
+
+        return text.strip(";: ")
 
     @staticmethod
     def split_word(text, language_id):
@@ -773,96 +786,130 @@ class Command(BaseCommand):
     def migrate_examples(self, conn):
         print("Migrating examples...")
 
-        tables = {"synset": SynsetExample, "sense": SenseExample}
-        id_maps = {
-            "synset": self.synset_id_map,
-            "sense": self.sense_id_map,
-        }
+        sources = (
+            ("synset", SynsetExample, self.synset_id_map),
+            ("sense", SenseExample, self.sense_id_map),
+        )
 
-        for table, obj in tables.items():
-            id_map = id_maps[table]
-            query = f"""
-                    SELECT DISTINCT
-                        s.id AS old_{table}_id,
-                        tse.example AS example_text
+        for table, model, id_map in sources:
+            self.migrate_example_table(conn, table, model, id_map)
 
-                    FROM tbl_{table}_examples tse
+    def migrate_example_table(self, conn, table, model, id_map):
+        stage = f"examples_{table}"
 
-                    LEFT JOIN tbl_{table} s
-                        ON s.id = tse.{table}_attribute_id
-                    """
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    tse.id AS old_example_id,
+                    tse.{table}_attribute_id AS old_{table}_id,
+                    tse.example AS example_text
 
-            with conn.cursor() as cursor:
-                cursor.execute(query)
-                rows = cursor.fetchall()
+                FROM tbl_{table}_examples tse
 
-            migrated = 0
-            skipped = 0
+                """
+            )
+            rows = cursor.fetchall()
 
-            # Get the maximum number of characters allowed for the Example field.
-            example_max_len = obj._meta.get_field("text").max_length
+        # Get the maximum number of characters allowed for the Example field.
+        example_max_len = model._meta.get_field("text").max_length
+        migrated = 0
+        skipped = 0
+        seen = set()
+        batch = []
 
-            for row in rows:
-                old_id = row[f"old_{table}_id"]
-                example_text = self.clean_text(row["example_text"])
-                new_id = id_map.get(old_id)
+        def flush():
+            nonlocal migrated, skipped
 
-                if new_id is None:
-                    skipped += 1
+            inserted = self.insert_batch(stage, model, batch)
 
-                    self.log_skip(
-                        stage=f"examples_{table}",
-                        reason=f"{table}_not_migrated",
-                        row=row,
-                        context={f"old_{table}_id": old_id},
-                    )
-                    continue
+            migrated += len(inserted)
+            skipped += len(batch) - len(inserted)
+            batch.clear()
 
-                if len(example_text) > example_max_len:
-                    skipped += 1
+            print(f"  Migrated {migrated} {table} examples...")
 
-                    self.log_skip(
-                        stage=f"examples_{table}",
-                        reason="example_text_too_long",
-                        row=row,
-                        context={
-                            f"new_{table}_id": new_id,
-                            "example_length": len(example_text),
-                            "maximum_length": example_max_len,
-                            "cleaned_example_text": example_text,
-                        },
-                    )
-                    continue
+        for row in rows:
+            old_id = row[f"old_{table}_id"]
+            example_text = self.clean_example(row["example_text"])
 
-                try:
-                    example = obj.objects.create(
-                        **{f"{table}_id": new_id, "text": example_text}
-                    )
+            if not example_text:
+                skipped += 1
 
-                except Exception as e:
-                    skipped += 1
+                self.log_skip(
+                    stage=stage,
+                    reason="empty_example",
+                    row=row,
+                    context={f"old_{table}_id": old_id},
+                )
+                continue
 
-                    self.log_skip(
-                        stage=f"examples_{table}",
-                        reason="db_upload_error",
-                        row=row,
-                        error=e,
-                        context={
-                            "new_id": new_id,
-                            "example": example_text,
-                            "example_length": len(example_text),
-                        },
-                    )
-                    continue
+            new_id = id_map.get(old_id)
 
-                if example:
-                    migrated += 1
-                    self.record_migrated(f"examples_{table}")
+            if new_id is None:
+                skipped += 1
 
-                if migrated > 0 and migrated % 10_000 == 0:
-                    print(f"  Migrated {migrated} {table} examples...")
+                self.log_skip(
+                    stage=stage,
+                    reason=f"{table}_not_migrated",
+                    row=row,
+                    context={f"old_{table}_id": old_id},
+                )
+                continue
 
-            print(f"Migrated {migrated} examples; skipped {skipped}")
+            if len(example_text) > example_max_len:
+                skipped += 1
+
+                self.log_skip(
+                    stage=stage,
+                    reason="example_text_too_long",
+                    row=row,
+                    context={
+                        f"new_{table}_id": new_id,
+                        "example_length": len(example_text),
+                        "maximum_length": example_max_len,
+                        "cleaned_example_text": example_text,
+                    },
+                )
+                continue
+
+            key = (new_id, example_text)
+            if key in seen:
+                skipped += 1
+
+                self.log_skip(
+                    stage=stage,
+                    reason="duplicate_after_cleaning",
+                    row=row,
+                    context={
+                        f"new_{table}_id": new_id,
+                        "cleaned_example_text": example_text,
+                    },
+                )
+                continue
+
+            seen.add(key)
+
+            batch.append(
+                (
+                    row,
+                    model(**{f"{table}_id": new_id, "text": example_text}),
+                    {
+                        "new_id": new_id,
+                        "old_id": old_id,
+                        "example": example_text,
+                        "example_length": len(example_text),
+                    },
+                )
+            )
+
+            if len(batch) >= BATCH_SIZE:
+                flush()
+
+        if batch:
+            flush()
+
+        print(f"Migrated {migrated} {table} examples; skipped {skipped}")
 
     # ------------------------------------------------------------------
     # Relation types and relations

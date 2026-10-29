@@ -23,6 +23,14 @@ def highlight(text, q):
     return mark_safe(q_re.sub(f"<strong>{q}</strong>", text))
 
 
+# The texts of the senses' words, e.g. for joining with the join filter. Templates
+# can't take an attribute from each item of a list, and Sense.__str__ is empty.
+# `senses` must have their words loaded (select_related).
+@register.filter()
+def word_texts(senses):
+    return [sense.word.text for sense in senses]
+
+
 # The sense example form: for editing `example`, or for adding one to the sense when
 # there's no `example`. Building it here, when a template needs one, keeps the senses
 # querysets lazy in views that don't render them. A view re-rendering a form that

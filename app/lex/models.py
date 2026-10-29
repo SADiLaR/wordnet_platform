@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
 
-from .managers import SynsetManager, WordManager
+from .managers import RelationManager, SynsetManager, WordManager
 
 SYNSET_STR_MAX_LENGTH = 80
 MAX_WORDS = 3
@@ -90,7 +90,7 @@ class Synset(models.Model):
         related_name="derived_synsets",
     )
     display_name = models.CharField(
-        max_length=100, verbose_name=_("display_name"), blank=True
+        max_length=150, verbose_name=_("display_name"), blank=True
     )
     history = HistoricalRecords(
         bases=[HistoricalChangesMixin, models.Model], excluded_fields=["display_name"]
@@ -326,3 +326,5 @@ class Relation(models.Model):
     def save(self, *args, **kwargs):
         self.display_name = f"{self.synset_from.display_name} --{self.type}-> {self.synset_to.display_name}"
         super().save(*args, **kwargs)
+
+    objects = RelationManager()

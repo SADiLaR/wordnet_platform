@@ -1,14 +1,15 @@
 from django.contrib import admin
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, functions
 from django.shortcuts import render
 from django.urls import reverse
 
-from lex.models import Sense, Synset, Word, Wordnet
+from lex.models import Relation, Sense, Synset, Word, Wordnet
 
 CONCERN_MODELS = {
     "word": Word,
     "synset": Synset,
+    "relation": Relation,
 }
 
 
@@ -41,6 +42,13 @@ def _filter_concern_by_wordnet(queryset, model_name, wordnet_pk):
             .order_by("text", "pk")
         )
 
+    if model_name == "relation":
+        return queryset.filter(synset_from__wordnet_id=wordnet_pk).order_by(
+            functions.Least("synset_from_id", "synset_to_id"),
+            functions.Greatest("synset_from_id", "synset_to_id"),
+            "pk",
+        )
+
 
 def concerns_report(request):
     selected_wordnet = request.GET.get("wordnet")
@@ -49,10 +57,7 @@ def concerns_report(request):
 
     concerns = []
 
-    for model_name, model in [
-        ("word", Word),
-        ("synset", Synset),
-    ]:
+    for model_name, model in CONCERN_MODELS.items():
         for concern in model.objects.concerns():
             if selected_concern and concern["key"] != selected_concern:
                 continue

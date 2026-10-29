@@ -9,6 +9,7 @@
         {% for example in examples %}
             <li class="hover-reveal-delete py-2 border-bottom">
                 <span class="fw-medium">{{ example.text }}</span>
+                {% if not readonly %}
                 <button
                     type="button"
                     class="btn btn-sm btn-outline-danger btn-delete py-0 ms-2"
@@ -19,6 +20,7 @@
                 <div class="collapse" id="del-example-{{ example.pk }}">
                     {% include "editor/snippets/_delete_synsetexample_confirm.html" with example=example %}
                 </div>
+                {% endif %}
             </li>
         {% endfor %}
     </ul>

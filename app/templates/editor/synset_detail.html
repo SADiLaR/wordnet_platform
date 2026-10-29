@@ -22,24 +22,20 @@
   <div class="col-md-6">
     {% include "editor/snippets/_working_synset.html" %}
     {# QA Warnings #}
+    {% if concerns %}
     <div class="card border-danger">
         <div class="card-header bg-danger-subtle">
             <h2 class="h6 mb-0">{% trans "QA Warnings" %}</h2>
         </div>
         <div class="card-body">
-            {% if concerns %}
-                <ul class="mb-0">
-                    {% for concern in concerns %}
-                        <li class="mb-2"><span aria-hidden="true">⚠</span> {{ concern.description }}</li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="text-body-secondary mb-0">
-                    {% trans "No QA concerns found." %}
-                </p>
-            {% endif %}
+            <ul class="mb-0">
+            {% for concern in concerns %}
+                <li class="mb-2"><span aria-hidden="true">⚠</span> {{ concern.description }}</li>
+            {% endfor %}
+            </ul>
         </div>
     </div>
+    {% endif %}
   </div>
   <div class="col-md-6">
     {% if in_source_wordnet %}

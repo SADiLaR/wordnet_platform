@@ -1,3 +1,7 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "wordnet_platform.settings"
+filterwarnings = ["ignore:No directory at:UserWarning"]
+
 [tool.ruff]
 line-length = 88 # has to be the same as in .editorconfig
 # **/static_files is owned by root via Docker, and so causes permission errors for ruff

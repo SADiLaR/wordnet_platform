@@ -1,0 +1,52 @@
+name: Run Playwright tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-tests:
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-latest
+    env:
+      DEBUG: "False"
+      SECRET_KEY: "django-insecure-ci-only"
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wordnet_db
+      DB_USER: sadilar
+      DB_PASSWORD: sadilar
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: sadilar
+          POSTGRES_PASSWORD: sadilar
+          POSTGRES_DB: wordnet_db
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # 7.0.0
+        with:
+          python-version: 3.12
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+      - name: Install Playwright browser
+        run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Run Playwright tests
+        run: |
+          cd app/
+          pytest editor/playwright_tests.py --browser ${{ matrix.browser }}

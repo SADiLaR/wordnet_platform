@@ -51,3 +51,6 @@ venv.bak/
 
 # Migration logs
 scripts/migration_logs/
+
+# Playwright outputs
+test-results/

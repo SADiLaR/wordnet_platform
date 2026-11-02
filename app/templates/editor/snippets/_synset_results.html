@@ -2,9 +2,9 @@
 {% load i18n %}
 {% spaceless %}
 {% if synsets %}
-    <ul class="dropdown-menu show" style="max-width: 100%; padding: 0">
+    <ul class="dropdown-menu mw-100 p-0 shadow show">
         {% for s in synsets %}
-        <li class="{% cycle 'bg-body-secondary' '' %} body">
+        <li class="{% cycle 'bg-body-secondary' '' %}">
             <button class="dropdown-item text-wrap" name="target_pk" value="{{ s.pk }}">
                 {% if s.display_name %}
                     {{ s.display_name | highlight:q }}

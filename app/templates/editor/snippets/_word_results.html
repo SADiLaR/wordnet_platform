@@ -2,9 +2,9 @@
 {% load i18n %}
 {% spaceless %}
 {% if words %}
-  <ul class="dropdown-menu show w-100">
+  <ul class="dropdown-menu mw-100 p-0 shadow show">
     {% for word in words %}
-    <li>
+    <li class="{% cycle 'bg-body-secondary' '' %}">
       <button
           class="dropdown-item"
           name="word_pk"

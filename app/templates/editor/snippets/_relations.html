@@ -2,17 +2,22 @@
 
 {% comment %}
 The <pre> blocks below render the following for outgoing relations:
-⊙ ─┬──▶ a : ...
-   ├──▶ b : ...
-   └──▶ +
+● ─┬──► a : ...
+   ├──► b : ...
+   └──► +
 
 and the following for incoming relations:
-⊙ ◀─┬── d : ...
+● ◄─┬── d : ...
     ├── e : ...
     └── +
 
 Each relation row is its own <pre> so that .relation-form divs can sit
 between rows without being inside the <pre> element.
+
+Use only characters from WGL4, a character set that common monospace fonts
+cover (e.g. Consolas, Courier New, Liberation Mono). When the font lacks a
+character, the browser takes it from another font, often at another width, and
+the tree's lines no longer meet.
 {% endcomment %}
 
 <div class="relations-section">
@@ -20,23 +25,22 @@ between rows without being inside the <pre> element.
 {% if error %}<div class="alert alert-danger py-1 px-2 small mt-1" role="alert">{{ error }}</div>{% endif %}
 {% if relations.outgoing %}
   <h4 class="text-body-secondary small fw-semibold mt-2 mb-1">{% trans "Outgoing" %}</h4>
-  {% comment %}&#xFE0E; is the Unicode text presentation selector — it forces ▶/◀ to render as plain text glyphs rather than coloured emoji{% endcomment %}
   {% for reltype_id, rel_info in relations.outgoing.items %}
     <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
     <div class="mb-2">
       {% for rel in rel_info.relations %}
         {% if forloop.first and forloop.last and readonly %}
-           {% include "editor/snippets/_relation_branch.html" with connector="⊙ ────▶&#xFE0E; " tgt_synset=rel.synset_to %}
+           {% include "editor/snippets/_relation_branch.html" with connector="● ────► " tgt_synset=rel.synset_to %}
         {% elif forloop.first %}
-           {% include "editor/snippets/_relation_branch.html" with connector="⊙ ─┬──▶&#xFE0E; " tgt_synset=rel.synset_to %}
+           {% include "editor/snippets/_relation_branch.html" with connector="● ─┬──► " tgt_synset=rel.synset_to %}
         {% elif forloop.last and readonly %}
-           {% include "editor/snippets/_relation_branch.html" with connector="   └──▶&#xFE0E; " tgt_synset=rel.synset_to %}
+           {% include "editor/snippets/_relation_branch.html" with connector="   └──► " tgt_synset=rel.synset_to %}
         {% else %}
-           {% include "editor/snippets/_relation_branch.html" with connector="   ├──▶&#xFE0E; " tgt_synset=rel.synset_to %}
+           {% include "editor/snippets/_relation_branch.html" with connector="   ├──► " tgt_synset=rel.synset_to %}
         {% endif %}
       {% endfor %}
       {% if not readonly %}
-        {% include "editor/snippets/_relation_add_button.html" with connector="   └──▶&#xFE0E; " direction="outgoing" %}
+        {% include "editor/snippets/_relation_add_button.html" with connector="   └──► " direction="outgoing" %}
       {% endif %}
     </div>
   {% endfor %}
@@ -48,9 +52,9 @@ between rows without being inside the <pre> element.
     <div class="mb-2">
       {% for rel in rel_info.relations %}
         {% if forloop.first and forloop.last and readonly %}
-          {% include "editor/snippets/_relation_branch.html" with connector="⊙ ◀&#xFE0E;──── " tgt_synset=rel.synset_from %}
+          {% include "editor/snippets/_relation_branch.html" with connector="● ◄──── " tgt_synset=rel.synset_from %}
         {% elif forloop.first %}
-          {% include "editor/snippets/_relation_branch.html" with connector="⊙ ◀&#xFE0E;─┬── " tgt_synset=rel.synset_from %}
+          {% include "editor/snippets/_relation_branch.html" with connector="● ◄─┬── " tgt_synset=rel.synset_from %}
         {% elif forloop.last and readonly %}
           {% include "editor/snippets/_relation_branch.html" with connector="    └── " tgt_synset=rel.synset_from %}
         {% else %}

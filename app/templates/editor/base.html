@@ -84,8 +84,9 @@
     updateStatusButtons();
   });
 
+  // Focus the first field the user can type in. A hidden input can't take focus.
   document.addEventListener('shown.bs.collapse', function (e) {
-    const input = e.target.querySelector('input, textarea, select');
+    const input = e.target.querySelector('input:not([type="hidden"]), textarea, select');
     if (input) input.focus();
   });
 </script>

@@ -2,7 +2,7 @@ import pytest
 from django.urls import reverse
 from playwright.sync_api import Page, expect
 
-from lex.models import Language, PartOfSpeech, Synset, Wordnet
+from lex.models import Language, PartOfSpeech, Sense, Synset, Word, Wordnet
 
 # This file is called playwright_tests.py to avoid manage.py test (test*.py)
 # picking it up and executing it.
@@ -33,6 +33,23 @@ def test_status_warning(page: Page):
     status.get_by_text("Complete", exact=True).click()
 
     expect(page.get_by_text("This synset may not be complete:")).to_be_visible()
+
+
+def test_add_usage_example_focuses_textarea(page: Page):
+    # The add form starts with a hidden input, which can't take focus
+    language = Language.objects.create(iso_code="afr", name="Afrikaans")
+    wordnet = Wordnet.objects.create(name="Toets Woordnet", language=language)
+    pos = PartOfSpeech.objects.create(name="noun")
+    synset = Synset.objects.create(
+        definition="'n Toets synset", wordnet=wordnet, pos=pos
+    )
+    word = Word.objects.create(text="toets", pos=pos, language=language)
+    Sense.objects.create(word=word, synset=synset)
+    page.goto(reverse("editor:synset_detail", kwargs={"pk": synset.pk}))
+
+    page.get_by_role("button", name="Add usage example").click()
+
+    expect(page.get_by_role("textbox", name="Example for “toets”")).to_be_focused()
 
 
 @pytest.mark.parametrize(

@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
 
-from .managers import SynsetManager, WordManager
+from .managers import ActiveRelationManager, SynsetManager, WordManager
 
 SYNSET_STR_MAX_LENGTH = 80
 MAX_WORDS = 3
@@ -288,6 +288,12 @@ class PartOfSpeech(models.Model):
 
 class RelationType(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("name"))
+    allowed = models.BooleanField(
+        default=False,
+        verbose_name=_("Allowed"),
+        help_text=_("Whether relations of this type can be created"),
+    )
+    objects = ActiveRelationManager()
     history = HistoricalRecords()
 
     class Meta:

@@ -178,7 +178,8 @@ class EditorViewTest(TestCase):
             text="Hierdie is 'n toets.", sense=self.sense_1
         )
 
-        self.relation_type = RelationType.objects.create(name="hyper")
+        self.relation_type = RelationType.objects.create(name="hyper", allowed=True)
+        self._legacy_type = RelationType.objects.create(name="cause", allowed=False)
         self.rel1 = Relation.objects.create(
             synset_from=self.synset_e,
             synset_to=self.synset_f,
@@ -1153,6 +1154,8 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_add_relation_new.html")
         self.assertIn("types", response.context)
+        self.assertContains(response, "hyper")
+        self.assertNotContains(response, "cause")
 
     def test_suggest_relation_htmx_get_with_type(self):
         # Queries:

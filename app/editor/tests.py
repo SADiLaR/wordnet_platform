@@ -111,6 +111,10 @@ class FooterTest(TestCase):
 
 class EditorViewTest(TestCase):
     def setUp(self):
+        # No wordnet has pk 0, so none of the test wordnets is the source wordnet
+        # unless a test makes it one. Otherwise, when a test runs on its own, its
+        # first wordnet gets pk 1, the default, and its synsets are read-only.
+        self.enterContext(self.settings(SOURCE_WORDNET_ID=0))
 
         language = Language.objects.create(iso_code="afr", name="Afrikaans")
         self.wordnet = Wordnet.objects.create(name="Toets Wordnet", language=language)
@@ -425,6 +429,10 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["synset"], self.synset_a)
         self.assertEqual(self._heading(response), "alfa, bravo, charlie, delta")
+        # Not in the source wordnet: editable, with a status control and danger zone
+        self.assertFalse(response.context["readonly"])
+        self.assertIsNotNone(self._element_with_class(response, "status-control"))
+        self.assertContains(response, "Danger zone")
 
     def test_synset_examples(self):
         # The old tool left synset examples with empty text; they're left out
@@ -787,18 +795,38 @@ class EditorViewTest(TestCase):
         self.assertIsNone(self.synset_f.copied_from_id)
         self.assertEqual(self.synset_f.princeton_id, self.synset_d.princeton_id)
         self.assertEqual(set(Wordnet.objects.all()), {self.wordnet, self.wordnet_2})
+        # synset_d has no words: outside the source wordnet, a QA warning
+        self.assertTrue(
+            any(
+                concern["qs"].filter(pk=self.synset_d.pk).exists()
+                for concern in Synset.objects.concerns()
+            )
+        )
         # Queries:
         # fetch synset_d (with pos, wordnet, language, and the same for copied_from)
-        # 8 concern exists() checks (_synset_context)
         # relations of synset_d (_synset_context)
         # copies of synset_d, with their wordnets (_copied_synsets)
         # wordnets for the stub dropdown (_source_synset_context)
         # synset examples of synset_d (template)
         # senses of synset_d (none, so no example prefetch)
+        # (no concern checks: a source synset gets no QA warnings)
         # (no source card: no guess, no source relations or senses)
-        with self.assertNumQueries(14):
+        with self.assertNumQueries(6):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_d))
+        # Read-only: the working card has no edit controls, and there's no QA card,
+        # status control or danger zone
+        self.assertTrue(response.context["readonly"])
+        self.assertTemplateUsed(response, "editor/snippets/_working_synset.html")
+        self.assertNotContains(response, 'name="definition"')
+        for url_name in ("search_words_htmx", "add_relation_form_htmx"):
+            self.assertNotContains(
+                response, reverse(f"editor:{url_name}", kwargs={"pk": self.synset_d.pk})
+            )
+        self.assertEqual(response.context["concerns"], [])
+        self.assertNotContains(response, "QA Warnings")
+        self.assertIsNone(self._element_with_class(response, "status-control"))
+        self.assertNotContains(response, "Danger zone")
         # The copied synsets card takes the source card's place
         self.assertTemplateNotUsed(response, "editor/snippets/_source_synset.html")
         self.assertTemplateUsed(response, "editor/snippets/_copied_synsets.html")
@@ -882,13 +910,13 @@ class EditorViewTest(TestCase):
         self.assertEqual(set(Wordnet.objects.all()), {self.wordnet_2, self.wordnet})
         # Queries:
         # fetch synset (with pos, wordnet, language, and the same for copied_from)
-        # 8 concern exists() checks (_synset_context)
         # relations of synset (_synset_context)
         # copies of synset (_copied_synsets)
         # wordnets for the stub dropdown (_source_synset_context)
         # synset examples of synset (template)
         # senses of synset (none, so no example prefetch)
-        with self.assertNumQueries(14):
+        # (no concern checks: a source synset gets no QA warnings)
+        with self.assertNumQueries(6):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(synset))
         self.assertEqual(response.context["copied_synsets"], [])

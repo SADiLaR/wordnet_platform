@@ -157,7 +157,7 @@ def _build_relations(pk):
         else:
             direction = "incoming"
         if type_pk not in relations[direction]:
-            relations[direction][type_pk] = {"relations": [], "name": rel.type.name}
+            relations[direction][type_pk] = {"relations": [], "type": rel.type}
         relations[direction][type_pk]["relations"].append(rel)
     return {direction: dict(groups) for direction, groups in relations.items()}
 

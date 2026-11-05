@@ -1,0 +1,16 @@
+<div class="mb-2">
+    {% for rel in rel_info.relations %}
+        {% if forloop.first and forloop.last and not can_add %}
+            {% include "editor/snippets/_relation_branch.html" with connector="● ◄──── " tgt_synset=rel.synset_from %}
+        {% elif forloop.first %}
+            {% include "editor/snippets/_relation_branch.html" with connector="● ◄─┬── " tgt_synset=rel.synset_from %}
+        {% elif forloop.last and not can_add %}
+            {% include "editor/snippets/_relation_branch.html" with connector="    └── " tgt_synset=rel.synset_from %}
+        {% else %}
+            {% include "editor/snippets/_relation_branch.html" with connector="    ├── " tgt_synset=rel.synset_from %}
+        {% endif %}
+    {% endfor %}
+    {% if can_add %}
+        {% include "editor/snippets/_relation_add_button.html" with connector="    └── " direction="incoming" %}
+    {% endif %}
+</div>

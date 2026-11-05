@@ -16,6 +16,14 @@ def plain_static_storage(settings):
     }
 
 
+# The test database starts empty, so a test's first wordnet gets pk 1, the default
+# source wordnet, whose synsets are read-only. No wordnet has pk 0, so none is the
+# source unless a test makes it one.
+@pytest.fixture(autouse=True)
+def no_source_wordnet(settings):
+    settings.SOURCE_WORDNET_ID = 0
+
+
 # Tests create test data in the database. Playwright's sync API runs an asyncio
 # event loop in the test thread, and Django blocks database access from such a
 # thread: https://docs.djangoproject.com/en/5.2/topics/async/#async-safety

@@ -16,7 +16,10 @@
       <div><span class="text-body-tertiary">{% trans "Princeton ID" %} </span><code>{{ synset.princeton_id }}</code></div>
     {% endif %}
   </div>
-  {% include "editor/snippets/_status_control.html" %}
+  {# Synsets in the source wordnet aren't worked on here, so they have no status to set #}
+  {% if not readonly %}
+    {% include "editor/snippets/_status_control.html" %}
+  {% endif %}
 </div>
 
 <div class="row g-3">

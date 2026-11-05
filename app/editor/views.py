@@ -182,15 +182,18 @@ def _synset_context(pk=None, synset=None):
     if not pk:
         pk = synset.pk
 
+    # Synsets in the source wordnet can't be edited here. With nothing to fix, they
+    # get no QA warnings either, which saves their queries.
+    readonly = synset.wordnet_id == settings.SOURCE_WORDNET_ID
     concerns = []
+    if not readonly:
+        for concern in Synset.objects.concerns():
+            if concern["qs"].filter(pk=pk).exists():
+                concerns.append(concern)
 
-    for concern in Synset.objects.concerns():
-        if concern["qs"].filter(pk=pk).exists():
-            concerns.append(concern)
-
-    for concern in Word.objects.concerns():
-        if concern["qs"].filter(sense__synset=synset).exists():
-            concerns.append(concern)
+        for concern in Word.objects.concerns():
+            if concern["qs"].filter(sense__synset=synset).exists():
+                concerns.append(concern)
 
     senses = _senses(synset)
 
@@ -201,6 +204,7 @@ def _synset_context(pk=None, synset=None):
         "relations": _build_relations(pk),
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
         "concerns": concerns,
+        "readonly": readonly,
     }
     return context
 

@@ -156,3 +156,15 @@ class SynsetManager(models.Manager):
             self._pos_mismatch(),
             self._sense_example(),
         ]
+
+
+class ActiveRelationManager(models.Manager):
+    """Facilitate working only with types with allowed=True.
+
+    This still allows all legacy relation types in the admin, and will present
+    existing relations as-is, but for the user-facing parts, only certain types
+    are allowed going forward.
+    """
+
+    def active(self):
+        return self.filter(allowed=True)

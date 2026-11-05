@@ -26,45 +26,23 @@ the tree's lines no longer meet.
 {% if relations.outgoing %}
   <h4 class="text-body-secondary small fw-semibold mt-2 mb-1">{% trans "Outgoing" %}</h4>
   {% for reltype_id, rel_info in relations.outgoing.items %}
-    <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
-    <div class="mb-2">
-      {% for rel in rel_info.relations %}
-        {% if forloop.first and forloop.last and readonly %}
-           {% include "editor/snippets/_relation_branch.html" with connector="● ────► " tgt_synset=rel.synset_to %}
-        {% elif forloop.first %}
-           {% include "editor/snippets/_relation_branch.html" with connector="● ─┬──► " tgt_synset=rel.synset_to %}
-        {% elif forloop.last and readonly %}
-           {% include "editor/snippets/_relation_branch.html" with connector="   └──► " tgt_synset=rel.synset_to %}
-        {% else %}
-           {% include "editor/snippets/_relation_branch.html" with connector="   ├──► " tgt_synset=rel.synset_to %}
-        {% endif %}
-      {% endfor %}
-      {% if not readonly %}
-        {% include "editor/snippets/_relation_add_button.html" with connector="   └──► " direction="outgoing" %}
-      {% endif %}
-    </div>
+    <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.type.name }}</h5>
+    {% if readonly %}
+        {% include "editor/snippets/_relation_group_outgoing.html" with can_add=False %}
+    {% else %}
+        {% include "editor/snippets/_relation_group_outgoing.html" with can_add=rel_info.type.allowed %}
+    {% endif %}
   {% endfor %}
 {% endif %}
 {% if relations.incoming %}
   <h4 class="text-body-secondary small fw-semibold mt-3 mb-1">{% trans "Incoming" %}</h4>
   {% for reltype_id, rel_info in relations.incoming.items %}
-    <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.name }}</h5>
-    <div class="mb-2">
-      {% for rel in rel_info.relations %}
-        {% if forloop.first and forloop.last and readonly %}
-          {% include "editor/snippets/_relation_branch.html" with connector="● ◄──── " tgt_synset=rel.synset_from %}
-        {% elif forloop.first %}
-          {% include "editor/snippets/_relation_branch.html" with connector="● ◄─┬── " tgt_synset=rel.synset_from %}
-        {% elif forloop.last and readonly %}
-          {% include "editor/snippets/_relation_branch.html" with connector="    └── " tgt_synset=rel.synset_from %}
-        {% else %}
-          {% include "editor/snippets/_relation_branch.html" with connector="    ├── " tgt_synset=rel.synset_from %}
-        {% endif %}
-      {% endfor %}
-      {% if not readonly %}
-        {% include "editor/snippets/_relation_add_button.html" with connector="    └── " direction="incoming" %}
-      {% endif %}
-    </div>
+    <h5 class="text-body-tertiary small fst-italic mt-1 mb-1 ms-2">{{ rel_info.type.name }}</h5>
+    {% if readonly %}
+        {% include "editor/snippets/_relation_group_incoming.html" with can_add=False %}
+    {% else %}
+        {% include "editor/snippets/_relation_group_incoming.html" with can_add=rel_info.type.allowed %}
+    {% endif %}
   {% endfor %}
 {% endif %}
 {% if not relations.outgoing and not relations.incoming %}

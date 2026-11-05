@@ -157,7 +157,7 @@ def _build_relations(pk):
         else:
             direction = "incoming"
         if type_pk not in relations[direction]:
-            relations[direction][type_pk] = {"relations": [], "name": rel.type.name}
+            relations[direction][type_pk] = {"relations": [], "type": rel.type}
         relations[direction][type_pk]["relations"].append(rel)
     return {direction: dict(groups) for direction, groups in relations.items()}
 
@@ -575,7 +575,7 @@ def add_relation_form_htmx(request, pk):
 
     if r_type := request.GET.get("type"):
         template = "editor/snippets/_add_relation.html"
-        rel_type = get_object_or_404(RelationType, pk=r_type)
+        rel_type = get_object_or_404(RelationType.objects.active(), pk=r_type)
     else:
         template = "editor/snippets/_add_relation_new.html"
 
@@ -583,7 +583,7 @@ def add_relation_form_htmx(request, pk):
         "synset": synset,
         "type_id": rel_type.id if r_type else None,
         "direction": request.GET.get("direction"),
-        "types": RelationType.objects.all().order_by("name"),
+        "types": RelationType.objects.active().order_by("name"),
     }
     return render(
         request,
@@ -641,7 +641,7 @@ def add_relation_htmx(request, pk):
         context["error"] = _("A synset cannot be related to itself")
         return _render_with_summary(request, "editor/snippets/_relations.html", context)
 
-    rel_type = get_object_or_404(RelationType, id=type_id)
+    rel_type = get_object_or_404(RelationType.objects.active(), id=type_id)
     if Relation.objects.filter(
         synset_from=synset_to, synset_to=synset_from, type=rel_type
     ).exists():

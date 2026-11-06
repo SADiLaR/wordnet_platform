@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
 from simple_history.signals import post_create_historical_record
 
-from .managers import ActiveRelationManager, SynsetManager, WordManager
+from .managers import ActiveRelationManager, RelationManager, SynsetManager, WordManager
 
 SYNSET_STR_MAX_LENGTH = 80
 MAX_WORDS = 3
@@ -90,7 +90,7 @@ class Synset(models.Model):
         related_name="derived_synsets",
     )
     display_name = models.CharField(
-        max_length=100, verbose_name=_("display_name"), blank=True
+        max_length=150, verbose_name=_("display_name"), blank=True
     )
     history = HistoricalRecords(
         bases=[HistoricalChangesMixin, models.Model], excluded_fields=["display_name"]
@@ -115,7 +115,7 @@ class Synset(models.Model):
             )
             return f"{word_part} : {definition[:last_wanted_space]} ..."
 
-    def update_display_name(self):
+    def update_display_name(self, save=True):
         """We use display_name to avoid making DB calls in __str__().
         No historical record is kept of this change to the synset."""
         senses = (
@@ -129,7 +129,8 @@ class Synset(models.Model):
         display_words = words[: min(len(words), MAX_WORDS)]
         display_ellipsis = ", ..." if len(words) > MAX_WORDS else ""
         self.display_name = ", ".join(display_words) + display_ellipsis
-        self.save_without_historical_record()
+        if save:
+            self.save_without_historical_record()
 
     def short_display_name(self):
         return self.display_name or f"({self.pk})"
@@ -332,3 +333,5 @@ class Relation(models.Model):
     def save(self, *args, **kwargs):
         self.display_name = f"{self.synset_from.display_name} --{self.type}-> {self.synset_to.display_name}"
         super().save(*args, **kwargs)
+
+    objects = RelationManager()

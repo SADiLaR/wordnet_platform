@@ -3,6 +3,7 @@ from django.db import models
 from django.db.models import Count, Exists, OuterRef, Q
 from django.db.models.expressions import Value
 from django.db.models.fields import IntegerField
+from django.db.models.functions import Greatest, Least
 from django.db.models.lookups import Func
 from django.utils.translation import gettext_lazy as _
 
@@ -22,6 +23,13 @@ class RegexpCount(Func):
 
 
 class WordManager(models.Manager):
+    def affected_synsets(self, qs):
+        Sense = apps.get_model("lex", "Sense")
+        Synset = apps.get_model("lex", "Synset")
+        return Synset.objects.filter(
+            id__in=Sense.objects.filter(word__in=qs.order_by()).values("synset_id")
+        )
+
     def _language_mismatch(self):
         Sense = apps.get_model("lex", "Sense")
         mismatching_senses = Sense.objects.filter(word_id=OuterRef("pk")).exclude(
@@ -68,14 +76,20 @@ class WordManager(models.Manager):
         }
 
     def concerns(self):
-        return [
+        concerns = [
             self._language_mismatch(),
             self._suspicious_characters(),
             self._suspicious_brackets(),
         ]
+        for concern in concerns:
+            concern["synsets"] = self.affected_synsets(concern["qs"])
+        return concerns
 
 
 class SynsetManager(models.Manager):
+    def affected_synsets(self, qs):
+        return qs
+
     def _missing_definition(self):
         return {
             "key": "missing-definition",
@@ -149,13 +163,16 @@ class SynsetManager(models.Manager):
         }
 
     def concerns(self):
-        return [
+        concerns = [
             self._missing_definition(),
             self._without_words(),
             self._mixed_pos(),
             self._pos_mismatch(),
             self._sense_example(),
         ]
+        for concern in concerns:
+            concern["synsets"] = self.affected_synsets(concern["qs"])
+        return concerns
 
 
 class ActiveRelationManager(models.Manager):
@@ -168,3 +185,58 @@ class ActiveRelationManager(models.Manager):
 
     def active(self):
         return self.filter(allowed=True)
+
+
+class RelationManager(models.Manager):
+    def affected_synsets(self, qs):
+        Synset = apps.get_model("lex", "Synset")
+        qs = qs.order_by()
+        return Synset.objects.filter(
+            Q(id__in=qs.values("synset_from_id")) | Q(id__in=qs.values("synset_to_id"))
+        )
+
+    pair_order = (
+        Least("synset_from_id", "synset_to_id"),
+        Greatest("synset_from_id", "synset_to_id"),
+        "pk",
+    )
+    symmetric_relation_types = [
+        "similar_to",
+        "ant",
+        "also_see",
+        "near_antonym",
+        "attr",
+        "verb_group",
+    ]
+
+    def _both_directions(self):
+        Relation = apps.get_model("lex", "Relation")
+
+        reverse = Relation.objects.filter(
+            synset_from_id=OuterRef("synset_to_id"),
+            synset_to_id=OuterRef("synset_from_id"),
+            type_id=OuterRef("type_id"),
+        )
+
+        return {
+            "key": "relation-both-directions",
+            "name": _("Relation in both directions"),
+            "description": _(
+                "A one-directional relation type links two synsets both ways"
+            ),
+            "qs": (
+                self.get_queryset()
+                .annotate(has_reverse=Exists(reverse))
+                .filter(has_reverse=True)
+                .exclude(type__name__in=self.symmetric_relation_types)
+                .order_by(*self.pair_order)
+            ),
+        }
+
+    def concerns(self):
+        concerns = [
+            self._both_directions(),
+        ]
+        for concern in concerns:
+            concern["synsets"] = self.affected_synsets(concern["qs"])
+        return concerns

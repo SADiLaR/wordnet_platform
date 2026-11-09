@@ -177,9 +177,13 @@ class Word(models.Model):
 
     # TODO: needs more thought
     def save(self, *args, **kwargs):
+        # Read before saving, which sets it to False
+        is_new = self._state.adding
         super().save(*args, **kwargs)
-        for sense in self.sense_set.all():
-            sense.synset.update_display_name()
+        # A new word has no senses yet, so there's nothing to update or look up
+        if not is_new:
+            for sense in self.sense_set.all():
+                sense.synset.update_display_name()
 
     def delete(self, *args, **kwargs):
         synsets_to_update = [s.synset for s in self.sense_set.all()]

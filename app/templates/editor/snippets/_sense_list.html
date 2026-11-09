@@ -11,6 +11,13 @@
   <p class="text-secondary mb-3">{% trans "No words." %}</p>
 {% endif %}
 {% if error %}<p class="text-danger small mt-1 mb-2">{{ error }}</p>{% endif %}
+{% if already_linked_word %}
+  <p class="text-danger small mt-1 mb-2">
+    {% blocktrans trimmed with word=already_linked_word.text %}
+      <strong>{{ word }}</strong> is already linked to this synset.
+    {% endblocktrans %}
+  </p>
+{% endif %}
 {% if not readonly %}
 <button
     type="button"

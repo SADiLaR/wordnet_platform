@@ -33,6 +33,20 @@ class SynsetTestCase(TestCase):
         self.synset.refresh_from_db()
         self.assertEqual(self.synset.short_display_name(), "igama")
 
+    def test_display_name_follows_corrected_word(self):
+        # A typo in a word is fixed in every synset that uses it
+        word = Word.objects.create(
+            text="igma", pos=self.nounpos, language=self.language
+        )
+        Sense.objects.create(word=word, synset=self.synset)
+        self.synset.refresh_from_db()
+        self.assertEqual(self.synset.display_name, "igma")
+
+        word.text = "igama"
+        word.save()
+        self.synset.refresh_from_db()
+        self.assertEqual(self.synset.display_name, "igama")
+
     def test_str_one_word_short_definition(self):
         word = Word.objects.create(
             text="igama", pos=self.nounpos, language=self.language

@@ -270,6 +270,8 @@ class WordnetAdmin(admin.ModelAdmin):
 
 class RelationTypeAdmin(admin.ModelAdmin):
     ordering = ["name"]
+    list_display = ["name", "allowed"]
+    list_filter = ["allowed"]
 
 
 class RelationAdmin(SimpleHistoryAdmin):

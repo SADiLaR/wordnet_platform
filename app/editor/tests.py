@@ -8,7 +8,12 @@ from django.utils.html import escape
 
 from editor.filters import SynsetFilter
 from editor.models import Assignment
-from editor.views import _copied_synsets, _guess_source_synset, _synset_examples
+from editor.views import (
+    _copied_synsets,
+    _guess_source_synset,
+    _normalise_word_text,
+    _synset_examples,
+)
 from lex.models import (
     Language,
     PartOfSpeech,
@@ -30,6 +35,15 @@ class FrontPageTest(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/front_page.html")
         self.assertContains(response, f'href="{reverse("editor:browse_synsets")}"')
+
+
+class NormaliseWordTextTest(SimpleTestCase):
+    def test_tidies_whitespace(self):
+        self.assertEqual(_normalise_word_text("  toets   woord "), "toets woord")
+
+    def test_composes_characters(self):
+        # "e" + combining acute accent (NFD) becomes one "é" (NFC)
+        self.assertEqual(_normalise_word_text("cafe\u0301"), "caf\u00e9")
 
 
 class AboutPageTest(SimpleTestCase):
@@ -1377,6 +1391,21 @@ class EditorViewTest(TestCase):
     def _get_add_sense_url(self, synset_obj):
         return reverse("editor:add_sense_htmx", kwargs={"pk": synset_obj.pk})
 
+    def _search_words(self, q, synset=None):
+        # Queries:
+        # fetch synset (with wordnet, pos)
+        # search words
+        # look for the exact text
+        with self.assertNumQueries(3):
+            return self.client.get(
+                self._get_search_words_url(synset or self.synset_a), {"q": q}
+            )
+
+    def _new_word(self, text, pos=None):
+        return Word.objects.create(
+            text=text, pos=pos or self.pos_noun, language=self.wordnet.language
+        )
+
     def test_search_words_htmx_no_query(self):
         # Returns empty response when q is missing
         with self.assertNumQueries(0):
@@ -1385,28 +1414,79 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.content, b"")
 
     def test_search_words_htmx_returns_matching_words(self):
-        # Queries:
-        # fetch synset (with wordnet, language, pos)
-        # search words (filtered by language, pos, text)
-        with self.assertNumQueries(2):
-            response = self.client.get(
-                self._get_search_words_url(self.synset_a), {"q": "toets"}
-            )
+        response = self._search_words("toets")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_word_results.html")
         self.assertContains(response, "<strong>toets</strong> woord", html=True)
+        # A partial match doesn't stop the user from creating the word
+        self.assertTrue(response.context["can_create"])
 
     def test_search_words_htmx_excludes_already_linked(self):
         # word_1 is linked to synset_a via a new sense; should not appear in results
-        # Queries:
-        # fetch synset (with wordnet, language, pos)
-        # search words (excluding already-linked senses)
         Sense.objects.create(word=self.word_1, synset=self.synset_a)
-        with self.assertNumQueries(2):
-            response = self.client.get(
-                self._get_search_words_url(self.synset_a), {"q": "toets"}
-            )
+        response = self._search_words("toets")
         self.assertNotContains(response, self.word_1.text)
+
+    def test_search_words_htmx_only_spaces(self):
+        with self.assertNumQueries(0):
+            response = self.client.get(
+                self._get_search_words_url(self.synset_a), {"q": "   "}
+            )
+        self.assertEqual(response.content, b"")
+
+    def test_search_words_htmx_offers_create_without_matches(self):
+        response = self._search_words("sweeftuig")
+        self.assertTrue(response.context["can_create"])
+        self.assertContains(response, 'name="word_text"')
+        self.assertContains(response, 'value="sweeftuig"')
+        self.assertContains(response, "<strong>sweeftuig</strong> as new noun")
+
+    def test_search_words_htmx_no_create_for_existing_word(self):
+        response = self._search_words("toets woord")
+        self.assertQuerySetEqual(response.context["words"], [self.word_1])
+        self.assertFalse(response.context["can_create"])
+        self.assertFalse(response.context["already_linked"])
+        self.assertNotContains(response, 'name="word_text"')
+
+    def test_search_words_htmx_create_is_case_sensitive(self):
+        self._new_word("iSonto")
+
+        response = self._search_words("isonto")
+        self.assertTrue(response.context["can_create"])
+
+    def test_search_words_htmx_create_is_accent_sensitive(self):
+        self._new_word("ṱhoho")
+
+        response = self._search_words("thoho")
+        self.assertQuerySetEqual(
+            response.context["words"], ["ṱhoho"], transform=lambda word: word.text
+        )
+        self.assertTrue(response.context["can_create"])
+
+    def test_search_words_htmx_create_ignores_other_pos(self):
+        self._new_word("hardloop", pos=self.pos_verb)
+        response = self._search_words("hardloop")
+        self.assertQuerySetEqual(response.context["words"], [])
+        self.assertTrue(response.context["can_create"])
+
+    def test_search_words_htmx_word_already_in_synset(self):
+        # The search leaves this word out, so say why it isn't offered
+        response = self._search_words("toets woord", synset=self.synset_c)
+        self.assertQuerySetEqual(response.context["words"], [])
+        self.assertFalse(response.context["can_create"])
+        self.assertTrue(response.context["already_linked"])
+        self.assertContains(response, "is already linked to this synset.")
+
+    def test_search_words_htmx_normalises_text(self):
+        response = self._search_words("  toets   woord ")
+        self.assertEqual(response.context["q"], "toets woord")
+        self.assertQuerySetEqual(response.context["words"], [self.word_1])
+        self.assertFalse(response.context["can_create"])
+
+    def test_search_words_htmx_text_too_long(self):
+        response = self._search_words("x" * 101)
+        self.assertFalse(response.context["can_create"])
+        self.assertContains(response, "A word can’t be longer than 100 characters.")
 
     def test_add_sense_htmx_success(self):
         self.assertEqual(self.synset_a.display_name, "Toets")
@@ -1482,22 +1562,112 @@ class EditorViewTest(TestCase):
         )
 
     def test_add_sense_htmx_duplicate(self):
-        # word_1 is already linked to synset_b; adding it again should not create a new sense
+        # word_1 is already linked to synset_c; adding it again should change nothing
+        self.assertEqual(self.synset_c.status, Synset.Status.STUB)
+        self.assertEqual(
+            Sense.objects.filter(word=self.word_1, synset=self.synset_c).count(), 1
+        )
         # Queries:
-        # fetch synset (with wordnet, language, pos)
-        # fetch word (with language, pos)
+        # fetch synset (with wordnet)
+        # fetch word (with pos)
+        # get_or_create sense check (SELECT)
         # fetch senses with words (context)
         # fetch sense examples (context)
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             response = self.client.post(
-                self._get_add_sense_url(self.synset_b),
+                self._get_add_sense_url(self.synset_c),
                 {"word_pk": self.word_1.pk},
             )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("error", response.context)
-        self.assertEqual(
-            Sense.objects.filter(word=self.word_1, synset=self.synset_b).count(), 1
+        self.assertContains(
+            response, "<strong>toets woord</strong> is already linked to this synset."
         )
+        self.assertEqual(
+            Sense.objects.filter(word=self.word_1, synset=self.synset_c).count(), 1
+        )
+        self.synset_c.refresh_from_db()
+        self.assertEqual(self.synset_c.status, Synset.Status.STUB)
+
+    def test_add_sense_htmx_new_word(self):
+        self.assertFalse(Word.objects.filter(text__startswith="sweeftuig").exists())
+        self.assertEqual(self.synset_a.status, Synset.Status.STUB)
+        # Queries:
+        # fetch synset (with wordnet)
+        # get_or_create word check (SELECT)
+        # SAVEPOINT
+        # INSERT word
+        # INSERT word history
+        # RELEASE SAVEPOINT
+        # get_or_create sense check (SELECT)
+        # SAVEPOINT
+        # INSERT sense
+        # INSERT sense history
+        # fetch senses ordered by text (display_name recalculation)
+        # UPDATE synset (display_name save)
+        # RELEASE SAVEPOINT
+        # UPDATE synset (status → draft)
+        # INSERT synset history
+        # fetch senses with words (context)
+        # fetch sense examples (context)
+        with self.assertNumQueries(17):
+            response = self.client.post(
+                self._get_add_sense_url(self.synset_a),
+                {"word_text": " sweeftuig   vis "},
+            )
+        self.assertEqual(response.status_code, 200)
+        # The text is cleaned up, and language and POS come from the synset
+        word = Word.objects.get(text="sweeftuig vis")
+        self.assertEqual(word.language, self.wordnet.language)
+        self.assertEqual(word.pos, self.pos_noun)
+        self.assertTrue(Sense.objects.filter(word=word, synset=self.synset_a).exists())
+        self.assertEqual(self._oob_heading(response), "sweeftuig vis")
+        self.assertEqual(self._oob_status(response), Synset.Status.DRAFT)
+
+    def test_add_sense_htmx_new_word_keeps_case_variant_separate(self):
+        self._new_word("iSonto")
+        # Queries: as in test_add_sense_htmx_new_word
+        with self.assertNumQueries(17):
+            self.client.post(
+                self._get_add_sense_url(self.synset_a), {"word_text": "isonto"}
+            )
+        self.assertEqual(self.synset_a.sense_set.get().word.text, "isonto")
+
+    def test_add_sense_htmx_text_of_existing_word_reuses_it(self):
+        # E.g. someone else created the word after this user's search
+        self.assertFalse(self.synset_a.sense_set.exists())
+        # Queries: as in test_add_sense_htmx_success, which also fetches the word first
+        with self.assertNumQueries(13):
+            self.client.post(
+                self._get_add_sense_url(self.synset_a),
+                {"word_text": "toets woord"},
+            )
+        self.assertEqual(self.synset_a.sense_set.get().word, self.word_1)
+
+    def test_add_sense_htmx_rejects_invalid_text(self):
+        words_before = Word.objects.count()
+        for text in ["   ", "x" * 101]:
+            with self.subTest(text=text):
+                # Queries:
+                # fetch synset (with wordnet)
+                # fetch senses (context: none, so no examples query)
+                with self.assertNumQueries(2):
+                    response = self.client.post(
+                        self._get_add_sense_url(self.synset_a),
+                        {"word_text": text},
+                    )
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("error", response.context)
+                self.assertEqual(Word.objects.count(), words_before)
+                self.assertFalse(self.synset_a.sense_set.exists())
+
+    def test_add_sense_htmx_text_of_longest_allowed_length(self):
+        text = "x" * 100
+        # Queries: as in test_add_sense_htmx_new_word
+        with self.assertNumQueries(17):
+            self.client.post(
+                self._get_add_sense_url(self.synset_a), {"word_text": text}
+            )
+        self.assertEqual(self.synset_a.sense_set.get().word.text, text)
 
     def _get_delete_sense_url(self, synset_obj, sense_obj):
         return reverse(

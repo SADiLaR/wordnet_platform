@@ -1,8 +1,9 @@
+import unicodedata
 from collections import defaultdict
 
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Prefetch, Q, prefetch_related_objects
+from django.db.models import Exists, OuterRef, Prefetch, Q, prefetch_related_objects
 from django.db.models.functions import Length
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
@@ -98,6 +99,50 @@ def _senses(synset):
         .prefetch_related(_examples_prefetch())
         .order_by("word__text")
     )
+
+
+WORD_TEXT_MAX_LENGTH = Word._meta.get_field("text").max_length
+
+
+def _word_too_long_error():
+    """The error for word text over the length limit; the search and add views share it."""
+    return _("A word can’t be longer than %(max)d characters.") % {
+        "max": WORD_TEXT_MAX_LENGTH
+    }
+
+
+def _normalise_word_text(text):
+    """Compose characters (NFC) and tidy whitespace, changing nothing else.
+
+    NFC makes, e.g., an e followed by a combining acute accent into one é, so the same
+    word typed in different ways is stored and matched the same way. Whitespace: the
+    ends are stripped and inner runs become one space.
+    """
+    return " ".join(unicodedata.normalize("NFC", text).split())
+
+
+def _find_or_create_word(text, synset):
+    """Return (word, None) for the text in the synset's language and POS, or (None, error)."""
+    text = _normalise_word_text(text)
+    if not text:
+        return None, _("A word can’t be empty.")
+    if len(text) > WORD_TEXT_MAX_LENGTH:
+        return None, _word_too_long_error()
+    # With get_or_create, someone creating the same word at the same moment just means
+    # that this request links to their word.
+    word, _created = Word.objects.get_or_create(
+        text=text, language_id=synset.wordnet.language_id, pos_id=synset.pos_id
+    )
+    return word, None
+
+
+def _word_mismatch_error(word, synset):
+    """Return why this existing word can't be linked to the synset, or None if it can."""
+    if word.language_id != synset.wordnet.language_id:
+        return _("The word and synset belong to different languages.")
+    if word.pos_id != synset.pos_id:
+        return _("The word and synset have different parts-of-speech.")
+    return None
 
 
 def _synset_examples(synset):
@@ -382,24 +427,39 @@ def synset_definition(request, pk):
 
 @require_GET
 def search_words_htmx(request, pk):
-    if not (q := request.GET.get("q")):
+    if not (q := _normalise_word_text(request.GET.get("q", ""))):
         return HttpResponse("", content_type="text/html")
 
-    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+    synset = get_object_or_404(Synset.objects.select_related("wordnet", "pos"), pk=pk)
+    same_language_and_pos = Word.objects.filter(
+        language=synset.wordnet.language_id, pos=synset.pos_id
+    )
     words = (
-        Word.objects.filter(
-            language=synset.wordnet.language_id,
-            pos=synset.pos_id,
-            text__unaccent__icontains=q,
-        )
+        same_language_and_pos.filter(text__unaccent__icontains=q)
         .exclude(sense__synset=synset)
         .order_by(Length("text"), "text")
     )
+    # A separate query, as `words` leaves out this synset's words and gets cut off.
+    # Case and accents count: isiZulu's iSonto and isonto can be different words, and
+    # Tshivenda's ṱ and t are different letters. Such a near match is listed in
+    # `words`, right above the option to create the new word.
+    exact_match = (
+        same_language_and_pos.filter(text=q)
+        .annotate(
+            in_synset=Exists(Sense.objects.filter(synset=synset, word=OuterRef("pk")))
+        )
+        .first()
+    )
+
+    too_long = len(q) > WORD_TEXT_MAX_LENGTH
 
     context = {
-        "q": q.strip(),
+        "q": q,
         "synset": synset,
         "words": words[:6],
+        "already_linked": exact_match is not None and exact_match.in_synset,
+        "can_create": exact_match is None and not too_long,
+        "error": _word_too_long_error() if too_long else None,
     }
     return render(
         request,
@@ -435,46 +495,36 @@ def delete_synset_example_htmx(request, synset_pk, pk):
 
 @require_POST
 def add_sense_htmx(request, pk):
+    """Link a word to the synset: an existing one, or a new one created from its text."""
     synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
 
-    word_pk = request.POST.get("word_pk")
-    word = get_object_or_404(Word.objects.select_related("pos"), pk=word_pk)
+    if "word_text" in request.POST:
+        word, error = _find_or_create_word(request.POST["word_text"], synset)
+    else:
+        word = get_object_or_404(
+            Word.objects.select_related("pos"), pk=request.POST.get("word_pk")
+        )
+        error = _word_mismatch_error(word, synset)
 
+    already_linked_word = None
+    if not error:
+        _sense, created = Sense.objects.get_or_create(synset=synset, word=word)
+        if created:
+            _save_updated_synset(synset)
+        else:
+            # The template words the message, so it can show the word in bold
+            already_linked_word = word
+
+    senses = _senses(synset)
     context = {
         "synset": synset,
-        "senses": _senses(synset),
+        "senses": senses,
+        "already_linked_word": already_linked_word,
     }
-
-    if word.language_id != synset.wordnet.language_id:
-        context["error"] = _("The word and synset belong to different languages.")
-        return _render_with_summary(
-            request,
-            "editor/snippets/_sense_list.html",
-            context,
-            senses=context["senses"],
-        )
-    if word.pos_id != synset.pos_id:
-        context["error"] = _("The word and synset have different parts-of-speech.")
-        return _render_with_summary(
-            request,
-            "editor/snippets/_sense_list.html",
-            context,
-            senses=context["senses"],
-        )
-    _sense, created = Sense.objects.get_or_create(synset=synset, word=word)
-    if not created:
-        context["error"] = _(
-            "The word '%(word)s' is already linked to this synset."
-        ) % {"word": word.text}
-        return _render_with_summary(
-            request,
-            "editor/snippets/_sense_list.html",
-            context,
-            senses=context["senses"],
-        )
-    _save_updated_synset(synset)
+    if error:
+        context["error"] = error
     return _render_with_summary(
-        request, "editor/snippets/_sense_list.html", context, senses=context["senses"]
+        request, "editor/snippets/_sense_list.html", context, senses=senses
     )
 
 

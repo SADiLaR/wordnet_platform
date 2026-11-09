@@ -9,8 +9,13 @@ from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.utils.translation import gettext as _
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import (
+    require_GET,
+    require_http_methods,
+    require_POST,
+)
 
 from lex.models import (
     Relation,
@@ -24,7 +29,7 @@ from lex.models import (
 )
 
 from .filters import SynsetFilter, make_search_qs
-from .forms import DefinitionForm, SenseExampleForm
+from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
 
 
 def about(request):
@@ -162,6 +167,46 @@ def assignment_queue(request, wn_pk=None):
     return render(request, "editor/assignment_queue.html", context)
 
 
+@require_http_methods(["GET", "POST"])
+def new_synset(request):
+    """Show the form for a new synset, or create the synset as a stub and open it."""
+    if request.method == "POST":
+        form = NewSynsetForm(request.POST)
+        if form.is_valid():
+            # The rest is left empty, for the linguist to fill in on the synset's page
+            synset = Synset.objects.create(
+                wordnet=form.cleaned_data["wordnet"],
+                pos=form.cleaned_data["pos"],
+                status=Synset.Status.STUB,
+            )
+            return redirect(synset)
+    else:
+        # Prefilled from the browse page's filters. A value that isn't one of the
+        # choices (e.g. the source wordnet) selects nothing.
+        form = NewSynsetForm(
+            initial={
+                "wordnet": request.GET.get("wordnet"),
+                "pos": request.GET.get("pos"),
+            }
+        )
+    return render(request, "editor/new_synset.html", {"form": form})
+
+
+def _new_synset_url(request):
+    """The new synset page's URL, prefilled with the browse filters where it can be.
+
+    A wordnet or POS is filled in when exactly one is ticked. With more than one, the
+    user chooses on the new synset page.
+    """
+    params = {}
+    for name in ("wordnet", "pos"):
+        values = request.GET.getlist(name)
+        if len(values) == 1:
+            params[name] = values[0]
+    url = reverse("editor:new_synset")
+    return f"{url}?{urlencode(params)}" if params else url
+
+
 def browse_synsets(request):
     wordnets = Wordnet.objects.all()
     context = {"wordnets": wordnets}
@@ -181,6 +226,7 @@ def browse_synsets(request):
     context["filter"] = f
     context["q"] = f.form.cleaned_data.get("search", "").strip()
     context["url_params"] = url_params.urlencode()
+    context["new_synset_url"] = _new_synset_url(request)
 
     return render(
         request,

@@ -14,6 +14,7 @@ from editor.views import (
     _copied_synsets,
     _guess_source_synset,
     _normalise_word_text,
+    _pos_not_allowed_error,
     _synset_examples,
 )
 from lex.models import (
@@ -486,6 +487,8 @@ class EditorViewTest(TestCase):
         self.assertFalse(response.context["readonly"])
         self.assertIsNotNone(self._element_with_class(response, "status-control"))
         self.assertContains(response, "Danger zone")
+        # Words can be added
+        self.assertContains(response, self._get_search_words_url(self.synset_a))
 
     def test_synset_examples(self):
         # The old tool left synset examples with empty text; they're left out
@@ -512,6 +515,15 @@ class EditorViewTest(TestCase):
         with self.assertNumQueries(13):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertIsNone(self._element_with_class(response, "synset-examples"))
+
+    def test_synset_detail_pos_not_allowed(self):
+        synset = self._synset_with_pos_not_allowed()
+        # Queries: as in test_synset_detail_no_synset_examples_section_when_all_empty
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(synset))
+        # No word search, but the reason. The same text as the views' error.
+        self.assertNotContains(response, self._get_search_words_url(synset))
+        self.assertContains(response, escape(_pos_not_allowed_error(synset)))
 
     def test_synset_detail_existing_with_princeton(self):
         self.assertEqual(self.synset_f.display_name, "")
@@ -1076,12 +1088,14 @@ class EditorViewTest(TestCase):
             return self.client.post(self._get_new_synset_url(), data)
 
     def test_new_synset_page(self):
-        # Every wordnet but the source wordnet can be chosen, and every POS, each
-        # alphabetically. Created last, so that order by pk would put them last.
+        # Every wordnet but the source wordnet can be chosen, and every allowed POS,
+        # each alphabetically. new_wordnet and pos_adjective are created last, so
+        # that ordering by pk would put them last.
         new_wordnet = Wordnet.objects.create(
             name="Nuwe Toets Wordnet", language=self.wordnet.language
         )
         pos_adjective = PartOfSpeech.objects.create(name="adjective")
+        PartOfSpeech.objects.create(name="multiple", allowed=False)
         # Queries:
         # list the wordnets, for the form
         # list the parts of speech, for the form
@@ -1531,6 +1545,16 @@ class EditorViewTest(TestCase):
             text=text, pos=pos or self.pos_noun, language=self.wordnet.language
         )
 
+    def _synset_with_pos_not_allowed(self):
+        pos_unknown = PartOfSpeech.objects.create(name="unknown", allowed=False)
+        return Synset.objects.create(wordnet=self.wordnet, pos=pos_unknown)
+
+    def test_search_words_htmx_no_create_for_pos_not_allowed(self):
+        synset = self._synset_with_pos_not_allowed()
+        response = self._search_words("sweeftuig", synset=synset)
+        self.assertFalse(response.context["can_create"])
+        self.assertContains(response, escape(_pos_not_allowed_error(synset)))
+
     def test_search_words_htmx_no_query(self):
         # Returns empty response when q is missing
         with self.assertNumQueries(0):
@@ -1617,7 +1641,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_a.display_name, "Toets")
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
-        # fetch synset (with wordnet, language, pos)
+        # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # get_or_create sense check (SELECT)
         # SAVEPOINT
@@ -1647,7 +1671,7 @@ class EditorViewTest(TestCase):
 
     def test_add_sense_htmx_wrong_language(self):
         # Queries:
-        # fetch synset (with wordnet, language, pos)
+        # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # fetch senses (context — synset_a has no senses so no examples query)
         other_language = Language.objects.create(iso_code="zul", name="isiZulu")
@@ -1667,7 +1691,7 @@ class EditorViewTest(TestCase):
 
     def test_add_sense_htmx_wrong_pos(self):
         # Queries:
-        # fetch synset (with wordnet, language, pos)
+        # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # fetch senses (context — synset_a has no senses so no examples query)
         wrong_pos_word = Word.objects.create(
@@ -1693,7 +1717,7 @@ class EditorViewTest(TestCase):
             Sense.objects.filter(word=self.word_1, synset=self.synset_c).count(), 1
         )
         # Queries:
-        # fetch synset (with wordnet)
+        # fetch synset (with wordnet, pos)
         # fetch word (with pos)
         # get_or_create sense check (SELECT)
         # fetch senses with words (context)
@@ -1717,7 +1741,7 @@ class EditorViewTest(TestCase):
         self.assertFalse(Word.objects.filter(text__startswith="sweeftuig").exists())
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
-        # fetch synset (with wordnet)
+        # fetch synset (with wordnet, pos)
         # get_or_create word check (SELECT)
         # SAVEPOINT
         # INSERT word
@@ -1773,7 +1797,7 @@ class EditorViewTest(TestCase):
         for text in ["   ", "x" * 101]:
             with self.subTest(text=text):
                 # Queries:
-                # fetch synset (with wordnet)
+                # fetch synset (with wordnet, pos)
                 # fetch senses (context: none, so no examples query)
                 with self.assertNumQueries(2):
                     response = self.client.post(
@@ -1784,6 +1808,21 @@ class EditorViewTest(TestCase):
                 self.assertIn("error", response.context)
                 self.assertEqual(Word.objects.count(), words_before)
                 self.assertFalse(self.synset_a.sense_set.exists())
+
+    def test_add_sense_htmx_new_word_pos_not_allowed(self):
+        # The search offers no "Create", but the view refuses a posted text too
+        synset = self._synset_with_pos_not_allowed()
+        words_before = Word.objects.count()
+        # Queries:
+        # fetch synset (with wordnet, pos)
+        # fetch senses (context: none, so no examples query)
+        with self.assertNumQueries(2):
+            response = self.client.post(
+                self._get_add_sense_url(synset), {"word_text": "sweeftuig"}
+            )
+        self.assertContains(response, escape(_pos_not_allowed_error(synset)))
+        self.assertEqual(Word.objects.count(), words_before)
+        self.assertFalse(synset.sense_set.exists())
 
     def test_add_sense_htmx_text_of_longest_allowed_length(self):
         text = "x" * 100
@@ -1805,7 +1844,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_c.display_name, "toets woord")
         self.assertEqual(self.synset_c.status, Synset.Status.STUB)
         # Queries:
-        # fetch synset
+        # fetch synset (with pos)
         # fetch sense
         # fetch sense examples (pre-delete PROTECT check)
         # DELETE sense
@@ -1829,7 +1868,7 @@ class EditorViewTest(TestCase):
     def test_delete_sense_htmx_wrong_synset(self):
         # sense_1 belongs to synset_b, not synset_a
         # Queries:
-        # fetch synset
+        # fetch synset (with pos)
         # fetch sense
         # fetch senses (context — synset_a has no senses so no examples query)
         with self.assertNumQueries(3):
@@ -1842,7 +1881,7 @@ class EditorViewTest(TestCase):
 
     def test_delete_sense_htmx_invalid_synset(self):
         # Queries:
-        # fetch synset (not found → 404)
+        # fetch synset (with pos; not found → 404)
         invalid_url = reverse(
             "editor:delete_sense_htmx",
             kwargs={"synset_pk": 99999, "sense_pk": self.sense_1.pk},
@@ -1853,7 +1892,7 @@ class EditorViewTest(TestCase):
 
     def test_delete_sense_htmx_invalid_sense(self):
         # Queries:
-        # fetch synset
+        # fetch synset (with pos)
         # fetch sense (not found → 404)
         invalid_url = reverse(
             "editor:delete_sense_htmx",

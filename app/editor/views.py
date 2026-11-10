@@ -126,8 +126,18 @@ def _normalise_word_text(text):
     return " ".join(unicodedata.normalize("NFC", text).split())
 
 
+def _pos_not_allowed_error(synset):
+    """The error for creating a word in a synset whose POS new words can't have."""
+    return _(
+        "New words can’t be added to a synset with part of speech “%(pos)s”. Ask a project lead to "
+        "correct the synset’s part of speech first."
+    ) % {"pos": synset.pos}
+
+
 def _find_or_create_word(text, synset):
     """Return (word, None) for the text in the synset's language and POS, or (None, error)."""
+    if not synset.pos.allowed:
+        return None, _pos_not_allowed_error(synset)
     text = _normalise_word_text(text)
     if not text:
         return None, _("A word can’t be empty.")
@@ -500,15 +510,21 @@ def search_words_htmx(request, pk):
         .first()
     )
 
-    too_long = len(q) > WORD_TEXT_MAX_LENGTH
+    # Why the typed text can't be created as a new word, if it can't
+    if not synset.pos.allowed:
+        error = _pos_not_allowed_error(synset)
+    elif len(q) > WORD_TEXT_MAX_LENGTH:
+        error = _word_too_long_error()
+    else:
+        error = None
 
     context = {
         "q": q,
         "synset": synset,
         "words": words[:6],
         "already_linked": exact_match is not None and exact_match.in_synset,
-        "can_create": exact_match is None and not too_long,
-        "error": _word_too_long_error() if too_long else None,
+        "can_create": exact_match is None and error is None,
+        "error": error,
     }
     return render(
         request,
@@ -545,7 +561,7 @@ def delete_synset_example_htmx(request, synset_pk, pk):
 @require_POST
 def add_sense_htmx(request, pk):
     """Link a word to the synset: an existing one, or a new one created from its text."""
-    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+    synset = get_object_or_404(Synset.objects.select_related("wordnet", "pos"), pk=pk)
 
     if "word_text" in request.POST:
         word, error = _find_or_create_word(request.POST["word_text"], synset)
@@ -581,7 +597,8 @@ def add_sense_htmx(request, pk):
 
 @require_POST
 def delete_sense_htmx(request, synset_pk, sense_pk):
-    synset = get_object_or_404(Synset, pk=synset_pk)
+    # The word list checks the POS, to offer adding words
+    synset = get_object_or_404(Synset.objects.select_related("pos"), pk=synset_pk)
     sense = get_object_or_404(Sense.objects.select_related("synset"), pk=sense_pk)
 
     context = {

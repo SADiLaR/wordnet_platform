@@ -38,7 +38,7 @@ class NewSynsetForm(forms.Form):
         widget=forms.Select(attrs={"class": "form-select"}),
     )
     pos = forms.ModelChoiceField(
-        queryset=PartOfSpeech.objects.order_by("name", "pk"),
+        queryset=PartOfSpeech.objects.filter(allowed=True).order_by("name", "pk"),
         label=_("Part of speech"),
         empty_label=_("Choose a part of speech…"),
         widget=forms.Select(attrs={"class": "form-select"}),

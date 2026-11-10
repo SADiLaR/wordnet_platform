@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n editor %}
 <div class="senses-section">
 <h3 class="text-body-tertiary small text-uppercase fw-semibold mb-1">{% trans "Words" %}</h3>
 {% if senses %}
@@ -18,7 +18,7 @@
     {% endblocktrans %}
   </p>
 {% endif %}
-{% if not readonly %}
+{% if not readonly and synset.pos.allowed %}
 <button
     type="button"
     class="btn btn-sm btn-add mb-3"
@@ -39,5 +39,11 @@
       name="q">
   <div id="word-results"></div>
 </div>
+{% elif not readonly %}
+  {% comment %}
+    A synset whose POS isn't allowed gets no word search: new words can't be given that
+    POS, and only words with the synset's POS can be linked.
+  {% endcomment %}
+  <p class="text-secondary small mb-3">{{ synset|pos_not_allowed_error }}</p>
 {% endif %}
 </div>

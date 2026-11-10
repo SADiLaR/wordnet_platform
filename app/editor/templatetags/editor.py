@@ -5,6 +5,7 @@ from django import template
 from django.utils.safestring import mark_safe
 
 from editor.forms import SenseExampleForm
+from editor.views import _pos_not_allowed_error
 
 register = template.Library()
 
@@ -29,6 +30,14 @@ def highlight(text, q):
 @register.filter()
 def word_texts(senses):
     return [sense.word.text for sense in senses]
+
+
+# Why no words can be added to the synset: its POS isn't allowed. The views give the
+# same error, from the same function, so the page and the views can't disagree.
+# `synset` must have its POS loaded (select_related).
+@register.filter()
+def pos_not_allowed_error(synset):
+    return _pos_not_allowed_error(synset)
 
 
 # The sense example form: for editing `example`, or for adding one to the sense when

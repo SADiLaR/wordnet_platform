@@ -586,6 +586,53 @@ class Command(BaseCommand):
 
         return "no"
 
+    def best_sense(self, synset_id, sentence):
+        """
+        Return the sense to move the example to when exactly one word
+        appears in the sentence and all other words clearly do not.
+        """
+        senses = self.senses_by_synset.get(synset_id)
+
+        if not senses:
+            return None, None, {}
+
+        results = {
+            sense_id: (word, self.word_in_sentence(word, sentence))
+            for sense_id, word in senses
+        }
+
+        matching_senses = [
+            sense_id for sense_id, (_, result) in results.items() if result == "yes"
+        ]
+
+        if len(matching_senses) > 1:
+            return None, "several_words_found", results
+
+        if not matching_senses:
+            return None, "no_word_found", results
+
+        sense_id = matching_senses[0]
+
+        if any(
+            result == "maybe"
+            for other_id, (_, result) in results.items()
+            if other_id != sense_id
+        ):
+            return None, "possible_other_word", results
+
+        return sense_id, "moved", results
+
+    def write_csv(self, filename, header, rows):
+        """Write rows to a CSV file in the migration log folder."""
+        path = self.log_directory / filename
+
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            writer.writerows(rows)
+
+        return path
+
     # ------------------------------------------------------------------
     # Languages
     # ------------------------------------------------------------------
@@ -1112,6 +1159,15 @@ class Command(BaseCommand):
             ]
             for old_sense_id, keys in old_sense_keys.items()
         }
+        # new synset id:[(new sense id, word text), ...]
+        # used to link each synset example to the one sense whose word it uses
+        self.senses_by_synset = defaultdict(list)
+        word_text_by_id = {word_id: key[0] for key, word_id in self.word_id_map.items()}
+
+        for (synset_id, word_id), sense_id in self.sense_key_ids.items():
+            self.senses_by_synset[synset_id].append(
+                (sense_id, word_text_by_id[word_id])
+            )
 
         print("Words:")
         print(f"  Migrated: {migrated_words}")
@@ -1135,34 +1191,43 @@ class Command(BaseCommand):
         print("Migrating examples...")
         self.split_example_rows = []
         self.split_example_synset_ids = set()
+        self.moved_examples = []
+        self.moved_seen = set()
+        self.moved_example_rows = []
         # Give synset same shape as sense target (self.sense_targets)
         synset_targets = {
             old_id: [(new_id, new_id, None)]
             for old_id, new_id in self.synset_id_map.items()
         }
 
-        sources = (
-            ("synset", SynsetExample, synset_targets),
-            ("sense", SenseExample, self.sense_targets),
+        # Synset examples first
+        self.migrate_example_table(conn, "synset", SynsetExample, synset_targets)
+        # Migrate synset examples to sense examples
+        for batch in batched(self.moved_examples, BATCH_SIZE):
+            self.insert_batch(
+                "examples_synset_moved_to_sense", SenseExample, list(batch)
+            )
+
+        self.migrate_example_table(conn, "sense", SenseExample, self.sense_targets)
+
+        self.write_csv(
+            "review_split_examples.csv",
+            [
+                "synset_id",
+                "original_word",
+                "word",
+                "sense_id",
+                "contains_word",
+                "example",
+            ],
+            self.split_example_rows,
         )
 
-        for table, model, id_map in sources:
-            self.migrate_example_table(conn, table, model, id_map)
-
-        path = self.log_directory / "review_split_examples.csv"
-        with path.open("w") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "synset_id",
-                    "original_word",
-                    "word",
-                    "sense_id",
-                    "contains_word",
-                    "example",
-                ]
-            )
-            writer.writerows(self.split_example_rows)
+        self.write_csv(
+            "review_synset_examples_to_sense.csv",
+            ["synset_id", "decision", "moved_to_sense_id", "word_results", "example"],
+            self.moved_example_rows,
+        )
 
     def migrate_example_table(self, conn, table, model, id_map):
         stage = f"examples_{table}"
@@ -1185,7 +1250,7 @@ class Command(BaseCommand):
         example_max_len = model._meta.get_field("text").max_length
         migrated = 0
         skipped = 0
-        seen = set()
+        seen = set(self.moved_seen) if table == "sense" else set()
         batch = []
 
         def flush():
@@ -1243,6 +1308,50 @@ class Command(BaseCommand):
                     },
                 )
                 continue
+
+            if table == "synset":
+                synset_id = targets[0][0]
+                sense_id, reason, results = self.best_sense(synset_id, example_text)
+
+                if reason:
+                    # Used for logging only:
+                    # Count every decision in the summary
+                    self.extra_counts[(stage, f"synset_example: {reason}")] += 1
+                    self.moved_example_rows.append(
+                        [
+                            synset_id,
+                            reason,
+                            sense_id or "",
+                            "; ".join(
+                                f"{word}: {result}" for word, result in results.values()
+                            ),
+                            example_text,
+                        ]
+                    )
+
+                if sense_id is not None:
+                    key = (sense_id, example_text)
+
+                    if key in self.moved_seen:
+                        skipped += 1
+                        self.log_skip(
+                            stage=stage,
+                            reason="duplicate_after_cleaning",
+                            row=row,
+                            context={"cleaned_example_text": example_text},
+                        )
+                        continue
+
+                    self.moved_seen.add(key)
+                    self.moved_examples.append(
+                        (
+                            row,
+                            SenseExample(sense_id=sense_id, text=example_text),
+                            {"new_id": sense_id, "example": example_text},
+                        )
+                    )
+                    continue
+
             # check if synset/sense id + example_text already seen
             new_targets = [
                 target for target in targets if (target[0], example_text) not in seen

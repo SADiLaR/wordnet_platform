@@ -219,7 +219,7 @@ def _synsets_for_detail_page():
     )
 
 
-def _synset_context(pk=None, synset=None):
+def _synset_context(pk=None, synset=None, **kwargs):
     if synset is None and pk is None:
         raise ValueError("Either pk or synset must be provided")
     if synset is None:
@@ -247,6 +247,7 @@ def _synset_context(pk=None, synset=None):
         "definition_form": DefinitionForm(initial={"definition": synset.definition}),
         "concerns": concerns,
         "readonly": readonly,
+        **kwargs,
     }
     return context
 
@@ -507,8 +508,9 @@ def add_sense_htmx(request, pk):
         error = _word_mismatch_error(word, synset)
 
     already_linked_word = None
+    sense = None
     if not error:
-        _sense, created = Sense.objects.get_or_create(synset=synset, word=word)
+        sense, created = Sense.objects.get_or_create(synset=synset, word=word)
         if created:
             _save_updated_synset(synset)
         else:
@@ -519,6 +521,7 @@ def add_sense_htmx(request, pk):
     context = {
         "synset": synset,
         "senses": senses,
+        "saved_pk": sense.pk if sense else None,
         "already_linked_word": already_linked_word,
     }
     if error:
@@ -701,14 +704,16 @@ def add_relation_htmx(request, pk):
         context = _synset_context(synset=synset)
         context["error"] = _("This relation already exists")
         return _render_with_summary(request, "editor/snippets/_relations.html", context)
-    Relation.objects.create(synset_from=synset_from, synset_to=synset_to, type=rel_type)
+    rel = Relation.objects.create(
+        synset_from=synset_from, synset_to=synset_to, type=rel_type
+    )
     if synset.status != Synset.Status.DRAFT:
         synset.status = Synset.Status.DRAFT
         synset.save(update_fields=["status"])
     return _render_with_summary(
         request,
         "editor/snippets/_relations.html",
-        context=_synset_context(synset=synset),
+        context=_synset_context(synset=synset, saved_pk=rel.pk),
     )
 
 

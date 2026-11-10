@@ -190,9 +190,11 @@ def browse_synsets(request):
 
 
 def _build_relations(pk):
-    all_relations = Relation.objects.filter(
-        Q(synset_from=pk) | Q(synset_to=pk)
-    ).select_related("type", "synset_to", "synset_from")
+    all_relations = (
+        Relation.objects.filter(Q(synset_from=pk) | Q(synset_to=pk))
+        .select_related("type", "synset_to", "synset_from")
+        .order_by("synset_to__display_name", "synset_from__display_name")
+    )
     relations = {"outgoing": defaultdict(list), "incoming": defaultdict(list)}
 
     for rel in all_relations:

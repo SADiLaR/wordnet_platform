@@ -394,6 +394,16 @@ class EditorViewTest(TestCase):
         self.assertLessEqual(len(elements), 1, f"Elements with class {css_class}")
         return elements[0] if elements else None
 
+    def _cancel_target(self, response):
+        """What the Cancel button of the one search bar in `response` empties."""
+        clear_url = self._get_clear_url()
+        (button,) = [
+            element
+            for element in self._html_elements(parse_html(response.content.decode()))
+            if dict(element.attributes).get("hx-get") == clear_url
+        ]
+        return dict(button.attributes)["hx-target"]
+
     def _text(self, element):
         """The text of an element that holds only text."""
         (text,) = element.children
@@ -1169,6 +1179,8 @@ class EditorViewTest(TestCase):
         self.assertIn("types", response.context)
         self.assertContains(response, "hyper")
         self.assertNotContains(response, "cause")
+        # Cancel empties the slot the form was loaded into, results included
+        self.assertEqual(self._cancel_target(response), "closest .relation-form")
 
     def test_suggest_relation_htmx_get_with_type(self):
         # Queries:
@@ -1181,6 +1193,8 @@ class EditorViewTest(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_add_relation.html")
+        # Cancel empties the slot the form was loaded into, results included
+        self.assertEqual(self._cancel_target(response), "closest .relation-form")
 
     def test_search_synset(self):
         # Queries:

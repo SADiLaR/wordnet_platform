@@ -1,5 +1,8 @@
 {% load i18n %}
-{# cancel_target: what Cancel empties; by default, the search bar itself #}
+{% comment %}
+cancel_target (required): what Cancel empties. Pass the slot the search form was
+loaded into, so that the results below the search bar and the form go too.
+{% endcomment %}
 <div class="synset-search d-flex gap-2">
     <input type="search"
            name="q"
@@ -13,7 +16,7 @@
     >
     <button type="button" class="btn btn-sm btn-outline-secondary"
             hx-get="{% url 'editor:clear_htmx' %}"
-            hx-target="{{ cancel_target|default:'closest .synset-search' }}"
+            hx-target="{{ cancel_target }}"
     >
         {% trans "Cancel" %}
     </button>

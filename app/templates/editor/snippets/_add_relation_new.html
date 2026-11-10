@@ -38,5 +38,5 @@
             {% endfor %}
         </select>
     </div>
-    {% include "editor/snippets/_synset_search_bar.html" with wordnet_id=synset.wordnet_id %}
+    {% include "editor/snippets/_synset_search_bar.html" with wordnet_id=synset.wordnet_id cancel_target="closest .relation-form" %}
 </form>

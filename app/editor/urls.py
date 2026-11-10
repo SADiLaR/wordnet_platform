@@ -13,6 +13,11 @@ urlpatterns = [
     ),
     path("synsets/", views.browse_synsets, name="browse_synsets"),
     path(
+        "synsets/new/",
+        views.new_synset,
+        name="new_synset",
+    ),
+    path(
         "synsets/<int:pk>/",
         views.synset_detail,
         name="synset_detail",

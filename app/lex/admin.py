@@ -58,7 +58,7 @@ class LanguageAdmin(admin.ModelAdmin):
 
 
 class PartOfSpeechAdmin(admin.ModelAdmin):
-    list_display = ["name", "short_name"]
+    list_display = ["name", "short_name", "allowed"]
     ordering = ["name"]
 
 

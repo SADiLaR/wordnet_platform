@@ -9,8 +9,13 @@ from django.http import HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.utils.translation import gettext as _
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import (
+    require_GET,
+    require_http_methods,
+    require_POST,
+)
 
 from lex.models import (
     Relation,
@@ -24,7 +29,7 @@ from lex.models import (
 )
 
 from .filters import SynsetFilter, make_search_qs
-from .forms import DefinitionForm, SenseExampleForm
+from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
 
 
 def about(request):
@@ -121,8 +126,18 @@ def _normalise_word_text(text):
     return " ".join(unicodedata.normalize("NFC", text).split())
 
 
+def _pos_not_allowed_error(synset):
+    """The error for creating a word in a synset whose POS new words can't have."""
+    return _(
+        "New words can’t be added to a synset with part of speech “%(pos)s”. Ask a project lead to "
+        "correct the synset’s part of speech first."
+    ) % {"pos": synset.pos}
+
+
 def _find_or_create_word(text, synset):
     """Return (word, None) for the text in the synset's language and POS, or (None, error)."""
+    if not synset.pos.allowed:
+        return None, _pos_not_allowed_error(synset)
     text = _normalise_word_text(text)
     if not text:
         return None, _("A word can’t be empty.")
@@ -162,6 +177,46 @@ def assignment_queue(request, wn_pk=None):
     return render(request, "editor/assignment_queue.html", context)
 
 
+@require_http_methods(["GET", "POST"])
+def new_synset(request):
+    """Show the form for a new synset, or create the synset as a stub and open it."""
+    if request.method == "POST":
+        form = NewSynsetForm(request.POST)
+        if form.is_valid():
+            # The rest is left empty, for the linguist to fill in on the synset's page
+            synset = Synset.objects.create(
+                wordnet=form.cleaned_data["wordnet"],
+                pos=form.cleaned_data["pos"],
+                status=Synset.Status.STUB,
+            )
+            return redirect(synset)
+    else:
+        # Prefilled from the browse page's filters. A value that isn't one of the
+        # choices (e.g. the source wordnet) selects nothing.
+        form = NewSynsetForm(
+            initial={
+                "wordnet": request.GET.get("wordnet"),
+                "pos": request.GET.get("pos"),
+            }
+        )
+    return render(request, "editor/new_synset.html", {"form": form})
+
+
+def _new_synset_url(request):
+    """The new synset page's URL, prefilled with the browse filters where it can be.
+
+    A wordnet or POS is filled in when exactly one is ticked. With more than one, the
+    user chooses on the new synset page.
+    """
+    params = {}
+    for name in ("wordnet", "pos"):
+        values = request.GET.getlist(name)
+        if len(values) == 1:
+            params[name] = values[0]
+    url = reverse("editor:new_synset")
+    return f"{url}?{urlencode(params)}" if params else url
+
+
 def browse_synsets(request):
     wordnets = Wordnet.objects.all()
     context = {"wordnets": wordnets}
@@ -181,6 +236,7 @@ def browse_synsets(request):
     context["filter"] = f
     context["q"] = f.form.cleaned_data.get("search", "").strip()
     context["url_params"] = url_params.urlencode()
+    context["new_synset_url"] = _new_synset_url(request)
 
     return render(
         request,
@@ -454,15 +510,21 @@ def search_words_htmx(request, pk):
         .first()
     )
 
-    too_long = len(q) > WORD_TEXT_MAX_LENGTH
+    # Why the typed text can't be created as a new word, if it can't
+    if not synset.pos.allowed:
+        error = _pos_not_allowed_error(synset)
+    elif len(q) > WORD_TEXT_MAX_LENGTH:
+        error = _word_too_long_error()
+    else:
+        error = None
 
     context = {
         "q": q,
         "synset": synset,
         "words": words[:6],
         "already_linked": exact_match is not None and exact_match.in_synset,
-        "can_create": exact_match is None and not too_long,
-        "error": _word_too_long_error() if too_long else None,
+        "can_create": exact_match is None and error is None,
+        "error": error,
     }
     return render(
         request,
@@ -499,7 +561,7 @@ def delete_synset_example_htmx(request, synset_pk, pk):
 @require_POST
 def add_sense_htmx(request, pk):
     """Link a word to the synset: an existing one, or a new one created from its text."""
-    synset = get_object_or_404(Synset.objects.select_related("wordnet"), pk=pk)
+    synset = get_object_or_404(Synset.objects.select_related("wordnet", "pos"), pk=pk)
 
     if "word_text" in request.POST:
         word, error = _find_or_create_word(request.POST["word_text"], synset)
@@ -535,7 +597,8 @@ def add_sense_htmx(request, pk):
 
 @require_POST
 def delete_sense_htmx(request, synset_pk, sense_pk):
-    synset = get_object_or_404(Synset, pk=synset_pk)
+    # The word list checks the POS, to offer adding words
+    synset = get_object_or_404(Synset.objects.select_related("pos"), pk=synset_pk)
     sense = get_object_or_404(Sense.objects.select_related("synset"), pk=sense_pk)
 
     context = {

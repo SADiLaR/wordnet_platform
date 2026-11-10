@@ -63,6 +63,13 @@
     {% else %}
     <p class="text-secondary">{% trans "No synsets match the current filters." %}</p>
     {% endif %}
+    {# Only after a search, so that users look for the synset before creating one #}
+    {% if q %}
+      <p>
+        {% trans "Didn’t find what you were looking for?" %}
+        <a href="{{ new_synset_url }}">{% trans "Create a new synset" %}</a>
+      </p>
+    {% endif %}
   </div>
   <div class="col-md-4 ps-md-4">
     {# Filters #}

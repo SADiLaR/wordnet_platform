@@ -281,6 +281,14 @@ class SynsetExample(models.Model):
 class PartOfSpeech(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("name"))
     short_name = models.CharField(max_length=1, verbose_name=_("short name"))
+    allowed = models.BooleanField(
+        default=True,
+        verbose_name=_("allowed"),
+        help_text=_(
+            "Whether new synsets and words can be given this part of speech. Turning "
+            "it off doesn’t change the synsets and words that already have it."
+        ),
+    )
     history = HistoricalRecords()
 
     class Meta:

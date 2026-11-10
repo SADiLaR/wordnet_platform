@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlsplit
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -12,6 +14,7 @@ from editor.views import (
     _copied_synsets,
     _guess_source_synset,
     _normalise_word_text,
+    _pos_not_allowed_error,
     _synset_examples,
 )
 from lex.models import (
@@ -254,9 +257,16 @@ class EditorViewTest(TestCase):
         return reverse("editor:clear_htmx")
 
     def test_browse_synsets(self):
+        # Queries:
+        # count the synsets, for the pagination
+        # fetch the page of synsets
+        # list the wordnets, for the filters
+        # list the parts of speech, for the filters
         with self.assertNumQueries(4):
             response = self.client.get(self._get_browse_url())
         self.assertEqual(response.status_code, 200)
+        # The link to create a synset only appears after a search
+        self.assertNotContains(response, self._get_new_synset_url())
 
     def test_synsets_wordnet_filter(self):
         data = {"wordnet": [self.wordnet.id]}
@@ -298,6 +308,25 @@ class EditorViewTest(TestCase):
         with self.assertNumQueries(4):
             response = self.client.get(self._get_browse_url(), {"search": "toets"})
         self.assertEqual(response.status_code, 200)
+
+    def test_browse_new_synset_link(self):
+        params = {
+            "search": "toets",
+            "wordnet": [self.wordnet.pk, self.wordnet_2.pk],
+            "pos": [self.pos_verb.pk],
+        }
+        # Queries:
+        # fetch the ticked part of speech, to check it's a choice
+        # fetch the ticked wordnets, to check they're choices
+        # then as in test_browse_synsets
+        # (the link adds none: it's built from the URL)
+        with self.assertNumQueries(6):
+            response = self.client.get(self._get_browse_url(), params)
+        url = urlsplit(response.context["new_synset_url"])
+        self.assertEqual(url.path, self._get_new_synset_url())
+        # The one ticked POS is passed on; the two ticked wordnets aren't
+        self.assertEqual(parse_qs(url.query), {"pos": [str(self.pos_verb.pk)]})
+        self.assertContains(response, f'href="{escape(url.geturl())}"')
 
     def test_search_filter_definition(self):
         data = {"search": "Addisionele"}
@@ -458,6 +487,8 @@ class EditorViewTest(TestCase):
         self.assertFalse(response.context["readonly"])
         self.assertIsNotNone(self._element_with_class(response, "status-control"))
         self.assertContains(response, "Danger zone")
+        # Words can be added
+        self.assertContains(response, self._get_search_words_url(self.synset_a))
 
     def test_synset_examples(self):
         # The old tool left synset examples with empty text; they're left out
@@ -484,6 +515,15 @@ class EditorViewTest(TestCase):
         with self.assertNumQueries(13):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertIsNone(self._element_with_class(response, "synset-examples"))
+
+    def test_synset_detail_pos_not_allowed(self):
+        synset = self._synset_with_pos_not_allowed()
+        # Queries: as in test_synset_detail_no_synset_examples_section_when_all_empty
+        with self.assertNumQueries(13):
+            response = self.client.get(self._get_synset_detail_url(synset))
+        # No word search, but the reason. The same text as the views' error.
+        self.assertNotContains(response, self._get_search_words_url(synset))
+        self.assertContains(response, escape(_pos_not_allowed_error(synset)))
 
     def test_synset_detail_existing_with_princeton(self):
         self.assertEqual(self.synset_f.display_name, "")
@@ -1036,6 +1076,91 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(Synset.objects.count(), synset_count)
 
+    def _get_new_synset_url(self):
+        return reverse("editor:new_synset")
+
+    def _get_new_synset_page(self, params=None):
+        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+            return self.client.get(self._get_new_synset_url(), params)
+
+    def _post_new_synset(self, data):
+        with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
+            return self.client.post(self._get_new_synset_url(), data)
+
+    def test_new_synset_page(self):
+        # Every wordnet but the source wordnet can be chosen, and every allowed POS,
+        # each alphabetically. new_wordnet and pos_adjective are created last, so
+        # that ordering by pk would put them last.
+        new_wordnet = Wordnet.objects.create(
+            name="Nuwe Toets Wordnet", language=self.wordnet.language
+        )
+        pos_adjective = PartOfSpeech.objects.create(name="adjective")
+        PartOfSpeech.objects.create(name="multiple", allowed=False)
+        # Queries:
+        # list the wordnets, for the form
+        # list the parts of speech, for the form
+        with self.assertNumQueries(2):
+            response = self._get_new_synset_page()
+        form = response.context["form"]
+        self.assertQuerySetEqual(
+            form.fields["wordnet"].queryset, [new_wordnet, self.wordnet]
+        )
+        self.assertQuerySetEqual(
+            form.fields["pos"].queryset, [pos_adjective, self.pos_noun, self.pos_verb]
+        )
+
+    def test_new_synset_page_prefilled(self):
+        # The browse page's link passes on its filters
+        # Queries: as in test_new_synset_page
+        with self.assertNumQueries(2):
+            response = self._get_new_synset_page(
+                {"wordnet": self.wordnet.pk, "pos": self.pos_verb.pk}
+            )
+        self.assertEqual(
+            response.context["form"].initial,
+            {"wordnet": str(self.wordnet.pk), "pos": str(self.pos_verb.pk)},
+        )
+
+    def test_new_synset(self):
+        existing_pks = list(Synset.objects.values_list("pk", flat=True))
+        # Queries:
+        # fetch the chosen wordnet, checking it's not the source wordnet
+        # fetch the chosen part of speech
+        # insert the synset
+        # insert its history record
+        with self.assertNumQueries(4):
+            response = self._post_new_synset(
+                {"wordnet": self.wordnet.pk, "pos": self.pos_verb.pk}
+            )
+        synset = Synset.objects.exclude(pk__in=existing_pks).get()
+        self.assertRedirects(
+            response, self._get_synset_detail_url(synset), fetch_redirect_response=False
+        )
+        self.assertEqual(synset.wordnet_id, self.wordnet.pk)
+        self.assertEqual(synset.pos_id, self.pos_verb.pk)
+        self.assertEqual(synset.status, Synset.Status.STUB)
+        self.assertEqual(synset.definition, "")
+        self.assertIsNone(synset.princeton_id)
+        self.assertIsNone(synset.copied_from_id)
+        self.assertEqual(synset.history.count(), 1)
+
+    def test_new_synset_in_source_wordnet(self):
+        synset_count = Synset.objects.count()
+        # Queries:
+        # fetch the chosen wordnet, excluding the source wordnet (not found)
+        # fetch the chosen part of speech
+        # list the wordnets, for the form shown again
+        # list the parts of speech, for the form shown again
+        with self.assertNumQueries(4):
+            response = self._post_new_synset(
+                {"wordnet": self.wordnet_2.pk, "pos": self.pos_verb.pk}
+            )
+        self.assertEqual(Synset.objects.count(), synset_count)
+        form = response.context["form"]
+        self.assertEqual(list(form.errors), ["wordnet"])
+        # The error is shown
+        self.assertContains(response, escape(form.errors["wordnet"][0]))
+
     def test_status_htmx_get(self):
         with self.assertNumQueries(1):
             response = self.client.get(self._get_synset_status_htmx_url(self.synset_a))
@@ -1420,6 +1545,16 @@ class EditorViewTest(TestCase):
             text=text, pos=pos or self.pos_noun, language=self.wordnet.language
         )
 
+    def _synset_with_pos_not_allowed(self):
+        pos_unknown = PartOfSpeech.objects.create(name="unknown", allowed=False)
+        return Synset.objects.create(wordnet=self.wordnet, pos=pos_unknown)
+
+    def test_search_words_htmx_no_create_for_pos_not_allowed(self):
+        synset = self._synset_with_pos_not_allowed()
+        response = self._search_words("sweeftuig", synset=synset)
+        self.assertFalse(response.context["can_create"])
+        self.assertContains(response, escape(_pos_not_allowed_error(synset)))
+
     def test_search_words_htmx_no_query(self):
         # Returns empty response when q is missing
         with self.assertNumQueries(0):
@@ -1506,7 +1641,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_a.display_name, "Toets")
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
-        # fetch synset (with wordnet, language, pos)
+        # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # get_or_create sense check (SELECT)
         # SAVEPOINT
@@ -1536,7 +1671,7 @@ class EditorViewTest(TestCase):
 
     def test_add_sense_htmx_wrong_language(self):
         # Queries:
-        # fetch synset (with wordnet, language, pos)
+        # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # fetch senses (context — synset_a has no senses so no examples query)
         other_language = Language.objects.create(iso_code="zul", name="isiZulu")
@@ -1556,7 +1691,7 @@ class EditorViewTest(TestCase):
 
     def test_add_sense_htmx_wrong_pos(self):
         # Queries:
-        # fetch synset (with wordnet, language, pos)
+        # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # fetch senses (context — synset_a has no senses so no examples query)
         wrong_pos_word = Word.objects.create(
@@ -1582,7 +1717,7 @@ class EditorViewTest(TestCase):
             Sense.objects.filter(word=self.word_1, synset=self.synset_c).count(), 1
         )
         # Queries:
-        # fetch synset (with wordnet)
+        # fetch synset (with wordnet, pos)
         # fetch word (with pos)
         # get_or_create sense check (SELECT)
         # fetch senses with words (context)
@@ -1606,7 +1741,7 @@ class EditorViewTest(TestCase):
         self.assertFalse(Word.objects.filter(text__startswith="sweeftuig").exists())
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
-        # fetch synset (with wordnet)
+        # fetch synset (with wordnet, pos)
         # get_or_create word check (SELECT)
         # SAVEPOINT
         # INSERT word
@@ -1662,7 +1797,7 @@ class EditorViewTest(TestCase):
         for text in ["   ", "x" * 101]:
             with self.subTest(text=text):
                 # Queries:
-                # fetch synset (with wordnet)
+                # fetch synset (with wordnet, pos)
                 # fetch senses (context: none, so no examples query)
                 with self.assertNumQueries(2):
                     response = self.client.post(
@@ -1673,6 +1808,21 @@ class EditorViewTest(TestCase):
                 self.assertIn("error", response.context)
                 self.assertEqual(Word.objects.count(), words_before)
                 self.assertFalse(self.synset_a.sense_set.exists())
+
+    def test_add_sense_htmx_new_word_pos_not_allowed(self):
+        # The search offers no "Create", but the view refuses a posted text too
+        synset = self._synset_with_pos_not_allowed()
+        words_before = Word.objects.count()
+        # Queries:
+        # fetch synset (with wordnet, pos)
+        # fetch senses (context: none, so no examples query)
+        with self.assertNumQueries(2):
+            response = self.client.post(
+                self._get_add_sense_url(synset), {"word_text": "sweeftuig"}
+            )
+        self.assertContains(response, escape(_pos_not_allowed_error(synset)))
+        self.assertEqual(Word.objects.count(), words_before)
+        self.assertFalse(synset.sense_set.exists())
 
     def test_add_sense_htmx_text_of_longest_allowed_length(self):
         text = "x" * 100
@@ -1694,7 +1844,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_c.display_name, "toets woord")
         self.assertEqual(self.synset_c.status, Synset.Status.STUB)
         # Queries:
-        # fetch synset
+        # fetch synset (with pos)
         # fetch sense
         # fetch sense examples (pre-delete PROTECT check)
         # DELETE sense
@@ -1718,7 +1868,7 @@ class EditorViewTest(TestCase):
     def test_delete_sense_htmx_wrong_synset(self):
         # sense_1 belongs to synset_b, not synset_a
         # Queries:
-        # fetch synset
+        # fetch synset (with pos)
         # fetch sense
         # fetch senses (context — synset_a has no senses so no examples query)
         with self.assertNumQueries(3):
@@ -1731,7 +1881,7 @@ class EditorViewTest(TestCase):
 
     def test_delete_sense_htmx_invalid_synset(self):
         # Queries:
-        # fetch synset (not found → 404)
+        # fetch synset (with pos; not found → 404)
         invalid_url = reverse(
             "editor:delete_sense_htmx",
             kwargs={"synset_pk": 99999, "sense_pk": self.sense_1.pk},
@@ -1742,7 +1892,7 @@ class EditorViewTest(TestCase):
 
     def test_delete_sense_htmx_invalid_sense(self):
         # Queries:
-        # fetch synset
+        # fetch synset (with pos)
         # fetch sense (not found → 404)
         invalid_url = reverse(
             "editor:delete_sense_htmx",

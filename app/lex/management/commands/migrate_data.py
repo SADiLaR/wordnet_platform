@@ -553,6 +553,11 @@ class Command(BaseCommand):
         if len(parts) < 2:
             return [text], None
 
+        # A part with a space is a phrase (e.g. "tiragalo ya go hwa"):
+        # don't split
+        if any(" " in part for part in parts):
+            return [text], "not_split_phrase"
+
         return parts, "split_word"
 
     @staticmethod
@@ -586,6 +591,29 @@ class Command(BaseCommand):
 
         return "no"
 
+    def best_match(self, ids_list, sentence):
+        """
+        Return the id whose word the sentence clearly uses.
+        """
+        results = {
+            id: (word, self.word_in_sentence(word, sentence)) for id, word in ids_list
+        }
+
+        found = [id for id, (_, result) in results.items() if result == "yes"]
+
+        if len(found) > 1:
+            return None, "several_words_found", results
+
+        if not found:
+            return None, "no_word_found", results
+
+        if any(
+            result == "maybe" for id, (_, result) in results.items() if id != found[0]
+        ):
+            return None, "possible_other_word", results
+
+        return found[0], "moved", results
+
     def best_sense(self, synset_id, sentence):
         """
         Return the sense to move the example to when exactly one word
@@ -596,31 +624,7 @@ class Command(BaseCommand):
         if not senses:
             return None, None, {}
 
-        results = {
-            sense_id: (word, self.word_in_sentence(word, sentence))
-            for sense_id, word in senses
-        }
-
-        matching_senses = [
-            sense_id for sense_id, (_, result) in results.items() if result == "yes"
-        ]
-
-        if len(matching_senses) > 1:
-            return None, "several_words_found", results
-
-        if not matching_senses:
-            return None, "no_word_found", results
-
-        sense_id = matching_senses[0]
-
-        if any(
-            result == "maybe"
-            for other_id, (_, result) in results.items()
-            if other_id != sense_id
-        ):
-            return None, "possible_other_word", results
-
-        return sense_id, "moved", results
+        return self.best_match(senses, sentence)
 
     def write_csv(self, filename, header, rows):
         """Write rows to a CSV file in the migration log folder."""
@@ -1218,6 +1222,7 @@ class Command(BaseCommand):
                 "word",
                 "sense_id",
                 "contains_word",
+                "reason",
                 "example",
             ],
             self.split_example_rows,
@@ -1280,9 +1285,9 @@ class Command(BaseCommand):
                 continue
 
             # [(sense/synset id, synset id, word), ...]
-            targets = id_map.get(old_id)
+            targets = id_map.get(old_id, [])
 
-            if targets is None:
+            if not targets:
                 skipped += 1
 
                 self.log_skip(
@@ -1351,7 +1356,34 @@ class Command(BaseCommand):
                         )
                     )
                     continue
+            # A sense example of a split word: keep it only on the part the sentence
+            # clearly uses; if that's unclear, keep it on every part.
+            if table == "sense" and len(targets) > 1 and old_id in self.split_words:
+                sense_word_list = [(sense_id, part) for sense_id, _, part in targets]
+                best_id, reason, results = self.best_match(
+                    sense_word_list, example_text
+                )
 
+                self.extra_counts[(stage, f"split_sense_example:{reason}")] += 1
+
+                for sense_id, synset_id, part in targets:
+                    self.split_example_rows.append(
+                        [
+                            synset_id,
+                            self.split_words[old_id],
+                            part,
+                            sense_id,
+                            results[sense_id][1],
+                            reason,
+                            example_text,
+                        ]
+                    )
+                if best_id is not None:
+                    # Clearly one word: only that sense gets the example
+                    targets = [target for target in targets if target[0] == best_id]
+                else:
+                    # Unsure: copied to every part, so an editor should review it
+                    self.split_example_synset_ids.add(targets[0][1])
             # check if synset/sense id + example_text already seen
             new_targets = [
                 target for target in targets if (target[0], example_text) not in seen
@@ -1382,21 +1414,6 @@ class Command(BaseCommand):
                 self.extra_counts[(stage, "extra_copies_from_split")] += (
                     len(new_targets) - 1
                 )
-
-            # Copied to several words: flag it for review.
-            if table == "sense" and len(targets) > 1 and old_id in self.split_words:
-                for sense_id, synset_id, part in targets:
-                    self.split_example_rows.append(
-                        [
-                            synset_id,
-                            self.split_words[old_id],
-                            part,
-                            sense_id,
-                            self.word_in_sentence(part, example_text),
-                            example_text,
-                        ]
-                    )
-                    self.split_example_synset_ids.add(synset_id)
 
             if len(batch) >= BATCH_SIZE:
                 flush()

@@ -30,6 +30,23 @@
 </nav>
 
 <main class="container-fluid p-4">
+  {% comment %}
+    Messages from the previous request, e.g. why a form that redirected didn't do what
+    was asked. The view's level (warning, info, …) picks the Bootstrap alert colour.
+    Bootstrap's names match Django's level tags, except that Bootstrap's error alert
+    is "danger". That's translated here, not with the MESSAGE_TAGS setting, which
+    would also change the class in the admin's messages and break its error style.
+  {% endcomment %}
+  {% for message in messages %}
+    <div
+        {% if message.level_tag == "error" %}
+          class="alert alert-danger"
+        {% else %}
+          class="alert alert-{{ message.level_tag }}"
+        {% endif %}
+        role="alert"
+    >{{ message }}</div>
+  {% endfor %}
   {% block content %}{% endblock %}
 </main>
 

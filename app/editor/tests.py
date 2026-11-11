@@ -1,8 +1,12 @@
 from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth.models import User
+from django.contrib.messages import constants as message_constants
+from django.contrib.messages import get_messages
+from django.contrib.messages.storage.base import Message
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 from django.test.html import parse_html
 from django.urls import reverse
@@ -73,6 +77,27 @@ class AboutPageTest(SimpleTestCase):
 
     def test_about_url(self):
         self.assertEqual(reverse("editor:about"), "/about/")
+
+
+class MessagesTest(SimpleTestCase):
+    def test_alert_classes(self):
+        # Bootstrap calls Django's "error" level "danger"; the others keep their tag
+        html = render_to_string(
+            "editor/base.html",
+            {
+                "messages": [
+                    Message(message_constants.ERROR, "Iets het misgeloop"),
+                    Message(message_constants.WARNING, "Pas op"),
+                ]
+            },
+        )
+        self.assertInHTML(
+            '<div class="alert alert-danger" role="alert">Iets het misgeloop</div>',
+            html,
+        )
+        self.assertInHTML(
+            '<div class="alert alert-warning" role="alert">Pas op</div>', html
+        )
 
 
 class FooterTest(TestCase):
@@ -977,10 +1002,12 @@ class EditorViewTest(TestCase):
         # fetch synset (with pos, wordnet, language, and the same for copied_from)
         # relations of synset (_synset_context)
         # copies of synset (_copied_synsets)
-        # wordnets for the stub dropdown (_source_synset_context)
+        # wordnets without a copy, to decide whether to show the form
         # synset examples of synset (template)
         # senses of synset (none, so no example prefetch)
-        with self.assertNumQueries(6):
+        # wordnets without a copy, for the wordnet dropdown (template)
+        # allowed parts of speech, for the POS dropdown (template)
+        with self.assertNumQueries(8):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(synset))
         self.assertEqual(response.context["copied_synsets"], [])
@@ -995,12 +1022,24 @@ class EditorViewTest(TestCase):
             f'<option value="{self.wordnet.pk}">{self.wordnet}</option>',
             html=True,
         )
+        # The POS dropdown starts with the source's POS; the other one isn't selected
+        self.assertEqual(synset.pos, self.pos_noun)
+        self.assertContains(
+            response,
+            f'<option value="{self.pos_noun.pk}" selected>{self.pos_noun}</option>',
+            html=True,
+        )
+        self.assertContains(
+            response,
+            f'<option value="{self.pos_verb.pk}">{self.pos_verb}</option>',
+            html=True,
+        )
 
-    def _post_create_stub(self, synset_obj, wordnet_pk):
+    def _post_create_stub(self, synset_obj, wordnet_pk, pos_pk):
         with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
             return self.client.post(
                 reverse("editor:create_stub", kwargs={"pk": synset_obj.pk}),
-                {"wordnet_pk": wordnet_pk},
+                {"wordnet": wordnet_pk, "pos": pos_pk},
             )
 
     def test_create_stub(self):
@@ -1010,19 +1049,24 @@ class EditorViewTest(TestCase):
             name="Nuwe Toets Wordnet", language=self.wordnet.language
         )
         self.assertFalse(Synset.objects.filter(wordnet=new_wordnet).exists())
+        # The user chose a POS other than the source's
+        self.assertNotEqual(self.synset_d.pos, self.pos_noun)
         # Queries:
         # fetch synset_d, checking it's in the source wordnet
-        # fetch new_wordnet, checking it's not the source wordnet
+        # fetch new_wordnet, checking it's not the source wordnet (form)
+        # fetch the POS, checking it's allowed (form)
         # look for a copy of synset_d in new_wordnet (none)
         # insert the stub
         # insert its history record
-        with self.assertNumQueries(5):
-            response = self._post_create_stub(self.synset_d, new_wordnet.pk)
+        with self.assertNumQueries(6):
+            response = self._post_create_stub(
+                self.synset_d, new_wordnet.pk, self.pos_noun.pk
+            )
         stub = Synset.objects.get(wordnet=new_wordnet)
         self.assertRedirects(
             response, self._get_synset_detail_url(stub), fetch_redirect_response=False
         )
-        self.assertEqual(stub.pos_id, self.synset_d.pos_id)
+        self.assertEqual(stub.pos, self.pos_noun)
         self.assertEqual(stub.princeton_id, self.synset_d.princeton_id)
         self.assertEqual(stub.copied_from_id, self.synset_d.pk)
         self.assertEqual(stub.status, Synset.Status.STUB)
@@ -1031,7 +1075,8 @@ class EditorViewTest(TestCase):
 
     def test_create_stub_existing_copy(self):
         # new_wordnet has a migrated synset with synset_d's Princeton ID, never linked.
-        # It counts as a copy, so it's opened instead of creating a second one.
+        # It counts as a copy, and has the chosen POS, so it's opened instead of
+        # creating a second one.
         new_wordnet = Wordnet.objects.create(
             name="Nuwe Toets Wordnet", language=self.wordnet.language
         )
@@ -1044,15 +1089,72 @@ class EditorViewTest(TestCase):
         synset_count = Synset.objects.count()
         # Queries:
         # fetch synset_d, checking it's in the source wordnet
-        # fetch new_wordnet, checking it's not the source wordnet
+        # fetch new_wordnet, checking it's not the source wordnet (form)
+        # fetch the POS, checking it's allowed (form)
         # look for a copy of synset_d in new_wordnet (found: migrated)
-        with self.assertNumQueries(3):
-            response = self._post_create_stub(self.synset_d, new_wordnet.pk)
+        with self.assertNumQueries(4):
+            response = self._post_create_stub(
+                self.synset_d, new_wordnet.pk, self.pos_verb.pk
+            )
         self.assertRedirects(
             response,
             self._get_synset_detail_url(migrated),
             fetch_redirect_response=False,
         )
+        self.assertEqual(Synset.objects.count(), synset_count)
+
+    def test_create_stub_existing_copy_other_pos(self):
+        # new_wordnet has a copy of synset_d, but it's a verb, and the user chose noun.
+        # It isn't opened, and no second copy is made: the user is sent back to
+        # synset_d with a message.
+        new_wordnet = Wordnet.objects.create(
+            name="Nuwe Toets Wordnet", language=self.wordnet.language
+        )
+        Synset.objects.create(
+            definition="'n Kopie as werkwoord",
+            wordnet=new_wordnet,
+            pos=self.pos_verb,
+            copied_from=self.synset_d,
+        )
+        synset_count = Synset.objects.count()
+        # Queries:
+        # fetch synset_d, checking it's in the source wordnet
+        # fetch new_wordnet, checking it's not the source wordnet (form)
+        # fetch the POS, checking it's allowed (form)
+        # look for a copy of synset_d in new_wordnet (found, with another POS)
+        with self.assertNumQueries(4):
+            response = self._post_create_stub(
+                self.synset_d, new_wordnet.pk, self.pos_noun.pk
+            )
+        self.assertRedirects(
+            response,
+            self._get_synset_detail_url(self.synset_d),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(Synset.objects.count(), synset_count)
+        expected_message = (
+            f"{new_wordnet} already has a copy of this synset with another part of "
+            "speech, so no stub was created. The copy is listed under “Copies in other "
+            "wordnets”."
+        )
+        self.assertSequenceEqual(
+            [str(message) for message in get_messages(response.wsgi_request)],
+            [expected_message],
+        )
+
+    def test_create_stub_disallowed_pos(self):
+        new_wordnet = Wordnet.objects.create(
+            name="Nuwe Toets Wordnet", language=self.wordnet.language
+        )
+        unknown = PartOfSpeech.objects.create(name="unknown", allowed=False)
+        synset_count = Synset.objects.count()
+        # Queries:
+        # fetch synset_d, checking it's in the source wordnet
+        # fetch new_wordnet, checking it's not the source wordnet (form)
+        # fetch the POS among the allowed ones (form; not found)
+        with self.assertNumQueries(3):
+            response = self._post_create_stub(self.synset_d, new_wordnet.pk, unknown.pk)
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(Synset.objects.count(), synset_count)
 
     def test_create_stub_not_from_source_wordnet(self):
@@ -1062,7 +1164,9 @@ class EditorViewTest(TestCase):
         # Queries:
         # fetch synset_a in the source wordnet (not found)
         with self.assertNumQueries(1):
-            response = self._post_create_stub(self.synset_a, self.wordnet.pk)
+            response = self._post_create_stub(
+                self.synset_a, self.wordnet.pk, self.pos_noun.pk
+            )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(Synset.objects.count(), synset_count)
 
@@ -1070,10 +1174,13 @@ class EditorViewTest(TestCase):
         synset_count = Synset.objects.count()
         # Queries:
         # fetch synset_d, checking it's in the source wordnet
-        # fetch the source wordnet, excluded as a target (not found)
-        with self.assertNumQueries(2):
-            response = self._post_create_stub(self.synset_d, self.wordnet_2.pk)
-        self.assertEqual(response.status_code, 404)
+        # fetch the source wordnet, excluded as a target (form; not found)
+        # fetch the POS, checking it's allowed (form)
+        with self.assertNumQueries(3):
+            response = self._post_create_stub(
+                self.synset_d, self.wordnet_2.pk, self.pos_verb.pk
+            )
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(Synset.objects.count(), synset_count)
 
     def _get_new_synset_url(self):

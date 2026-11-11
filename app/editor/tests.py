@@ -282,6 +282,8 @@ class EditorViewTest(TestCase):
         return reverse("editor:clear_htmx")
 
     def test_browse_synsets(self):
+        # The Source column's link checked below
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
         # Queries:
         # count the synsets, for the pagination
         # fetch the page of synsets
@@ -292,6 +294,11 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         # The link to create a synset only appears after a search
         self.assertNotContains(response, self._get_new_synset_url())
+        # synset_d's URL appears twice: its own row links to it, and so does
+        # synset_e's Source column, since synset_e was copied from it
+        self.assertContains(
+            response, f'href="{self._get_synset_detail_url(self.synset_d)}"', count=2
+        )
 
     def test_synsets_wordnet_filter(self):
         data = {"wordnet": [self.wordnet.id]}
@@ -696,9 +703,14 @@ class EditorViewTest(TestCase):
             self.assertContains(response, "border-info", count=1)
         else:
             self.assertContains(response, "border-secondary-subtle", count=1)
-        # A linked or suggested source shows its wordnet; only a suggestion is marked
-        wordnet_name = f"({escape(str(self.wordnet_2))})"
-        self.assertContains(response, wordnet_name, count=int(state != "none"))
+        # A linked or suggested source (synset_d, in every test that uses this) shows
+        # its wordnet in the title, which links to its page; only a suggestion is marked
+        has_source = int(state != "none")
+        title_link = (
+            f'<a href="{self._get_synset_detail_url(self.synset_d)}">'
+            f"Source synset in {escape(str(self.wordnet_2))}</a>"
+        )
+        self.assertContains(response, title_link, count=has_source, html=True)
         self.assertContains(response, ">Suggested<", count=int(state == "suggested"))
         self.assertContains(
             response, "No source synset linked.", count=int(state == "none")

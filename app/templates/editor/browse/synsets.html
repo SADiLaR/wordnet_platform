@@ -49,9 +49,9 @@
                     href="{% url 'editor:synset_detail' pk=synset.pk %}"
                     class="link-body-emphasis text-decoration-none"
                 >{{ synset | highlight:q }}</a></td>
-            <td><spanclass="badge badge-status status-{{ synset.status }}">{{ synset.get_status_display }}</span></td>
+            <td><span class="badge badge-status status-{{ synset.status }}">{{ synset.get_status_display }}</span></td>
             <td>{% if synset.copied_from %}<a
-                    href="#"
+                    href="{{ synset.copied_from.get_absolute_url }}"
                     class="link-body-emphasis text-decoration-none"
             >{{ synset.copied_from }}</a>{% else %}—{% endif %}</td>
         </tr>

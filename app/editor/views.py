@@ -2,10 +2,11 @@ import unicodedata
 from collections import defaultdict
 
 from django.conf import settings
+from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Prefetch, Q, prefetch_related_objects
 from django.db.models.functions import Length
-from django.http import HttpResponse, HttpResponseNotAllowed
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -339,11 +340,19 @@ def _source_synset_context(synset):
             .exclude(pk__in={copy.wordnet_id for copy in copied_synsets})
             .order_by("name", "pk")
         )
+        # The stub starts with the source's POS, which the user can change. If that
+        # POS isn't allowed, nothing is preselected and the user has to choose.
+        stub_form = NewSynsetForm(initial={"pos": synset.pos_id}, auto_id="stub-%s")
+        stub_form.fields["wordnet"].queryset = stub_wordnets
+        # Smaller dropdowns, to fit the card
+        for field in stub_form.fields.values():
+            field.widget.attrs["class"] = "form-select form-select-sm w-auto"
         return {
             "synset": synset,
             "in_source_wordnet": True,
             "copied_synsets": copied_synsets,
             "stub_wordnets": list(stub_wordnets),
+            "stub_form": stub_form,
         }
 
     if synset.copied_from_id:
@@ -382,27 +391,47 @@ def synset_detail(request, pk):
 @require_POST
 def create_stub(request, pk):
     """Create a stub in another wordnet, copied from a source synset, and open it."""
-    # Only a synset in the source wordnet can be copied, and only into another
-    # wordnet. Anything else is a 404.
+    # Only a synset in the source wordnet can be copied. Anything else is a 404.
     source_synset = get_object_or_404(
         Synset, pk=pk, wordnet_id=settings.SOURCE_WORDNET_ID
     )
-    wordnet = get_object_or_404(
-        Wordnet.objects.exclude(pk=settings.SOURCE_WORDNET_ID),
-        pk=request.POST.get("wordnet_pk"),
-    )
+    # The same fields as a new synset: any wordnet but the source, and an allowed POS.
+    # The page only offers valid choices, so an invalid form means a hand-made
+    # request: a plain 400, without re-showing the form with its errors.
+    form = NewSynsetForm(request.POST)
+    if not form.is_valid():
+        return HttpResponseBadRequest()
+    wordnet = form.cleaned_data["wordnet"]
+    pos = form.cleaned_data["pos"]
+
     # The page leaves out wordnets that have a copy, but one may have been made since
-    # it was loaded (another person, another window). Open that one instead.
-    stub = _copied_synsets(source_synset).filter(wordnet=wordnet).first()
-    if stub is None:
-        # The definition stays empty: the linguist writes their own
-        stub = Synset.objects.create(
-            wordnet=wordnet,
-            pos_id=source_synset.pos_id,
-            princeton_id=source_synset.princeton_id,
-            copied_from=source_synset,
-            status=Synset.Status.STUB,
+    # it was loaded (another person, another window). Open that one instead, if it has
+    # the chosen POS.
+    copies = list(_copied_synsets(source_synset).filter(wordnet=wordnet))
+    same_pos_copy = next((copy for copy in copies if copy.pos_id == pos.pk), None)
+    if same_pos_copy:
+        return redirect(same_pos_copy)
+    if copies:
+        # There already exists a synset copied from source_synset, but with a
+        # different POS. Only a single copy per wordnet is allowed.
+        messages.warning(
+            request,
+            _(
+                "%(wordnet)s already has a copy of this synset with another part of "
+                "speech, so no stub was created. The copy is listed under “Copies in "
+                "other wordnets”."
+            )
+            % {"wordnet": wordnet},
         )
+        return redirect(source_synset)
+
+    stub = Synset.objects.create(
+        wordnet=wordnet,
+        pos=pos,
+        princeton_id=source_synset.princeton_id,
+        copied_from=source_synset,
+        status=Synset.Status.STUB,
+    )
     return redirect(stub)
 
 

@@ -49,22 +49,20 @@
           class="d-flex flex-wrap gap-2 border-top pt-3 mt-3"
       >
         {% csrf_token %}
+        {% comment %}
+          Each dropdown has an empty first option and is required, so the user has to
+          choose. The POS starts with the source's, so usually there's nothing to change.
+        {% endcomment %}
         <label
-            for="stub-wordnet"
+            for="{{ stub_form.wordnet.id_for_label }}"
             class="visually-hidden"
-        >{% trans "Wordnet" %}</label>
-        {# The empty first option and `required` make the user choose a wordnet #}
-        <select
-            id="stub-wordnet"
-            name="wordnet_pk"
-            class="form-select form-select-sm w-auto"
-            required
-        >
-          <option value="">{% trans "Choose a wordnet…" %}</option>
-          {% for wordnet in stub_wordnets %}
-            <option value="{{ wordnet.pk }}">{{ wordnet }}</option>
-          {% endfor %}
-        </select>
+        >{{ stub_form.wordnet.label }}</label>
+        {{ stub_form.wordnet }}
+        <label
+            for="{{ stub_form.pos.id_for_label }}"
+            class="visually-hidden"
+        >{{ stub_form.pos.label }}</label>
+        {{ stub_form.pos }}
         <button class="btn btn-sm btn-primary">{% trans "Create stub" %}</button>
       </form>
     {% endif %}

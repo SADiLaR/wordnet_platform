@@ -678,9 +678,14 @@ class EditorViewTest(TestCase):
             self.assertContains(response, "border-info", count=1)
         else:
             self.assertContains(response, "border-secondary-subtle", count=1)
-        # A linked or suggested source shows its wordnet; only a suggestion is marked
-        wordnet_name = f"({escape(str(self.wordnet_2))})"
-        self.assertContains(response, wordnet_name, count=int(state != "none"))
+        # A linked or suggested source (synset_d, in every test that uses this) shows
+        # its wordnet in the title, which links to its page; only a suggestion is marked
+        has_source = int(state != "none")
+        title_link = (
+            f'<a href="{self._get_synset_detail_url(self.synset_d)}">'
+            f"Source synset in {escape(str(self.wordnet_2))}</a>"
+        )
+        self.assertContains(response, title_link, count=has_source, html=True)
         self.assertContains(response, ">Suggested<", count=int(state == "suggested"))
         self.assertContains(
             response, "No source synset linked.", count=int(state == "none")

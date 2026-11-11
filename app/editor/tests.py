@@ -257,6 +257,8 @@ class EditorViewTest(TestCase):
         return reverse("editor:clear_htmx")
 
     def test_browse_synsets(self):
+        # The Source column's link checked below
+        self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
         # Queries:
         # count the synsets, for the pagination
         # fetch the page of synsets
@@ -267,6 +269,11 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         # The link to create a synset only appears after a search
         self.assertNotContains(response, self._get_new_synset_url())
+        # synset_d's URL appears twice: its own row links to it, and so does
+        # synset_e's Source column, since synset_e was copied from it
+        self.assertContains(
+            response, f'href="{self._get_synset_detail_url(self.synset_d)}"', count=2
+        )
 
     def test_synsets_wordnet_filter(self):
         data = {"wordnet": [self.wordnet.id]}

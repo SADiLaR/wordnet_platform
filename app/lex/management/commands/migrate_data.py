@@ -859,7 +859,6 @@ class Command(BaseCommand):
             has_content = (
                 definition
                 or row["sense_count"] > 0
-                or row["princeton_id"]
                 or row["has_examples"]
                 or row["has_relations"]
             )

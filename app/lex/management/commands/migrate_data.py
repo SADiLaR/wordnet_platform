@@ -553,6 +553,11 @@ class Command(BaseCommand):
         if len(parts) < 2:
             return [text], None
 
+        # A part with a space is a phrase (e.g. "tiragalo ya go hwa"):
+        # don't split
+        if any(" " in part for part in parts):
+            return [text], "not_split_phrase"
+
         return parts, "split_word"
 
     @staticmethod
@@ -585,6 +590,52 @@ class Command(BaseCommand):
                     return "maybe"
 
         return "no"
+
+    def best_match(self, ids_list, sentence):
+        """
+        Return the id whose word the sentence clearly uses.
+        """
+        results = {
+            id: (word, self.word_in_sentence(word, sentence)) for id, word in ids_list
+        }
+
+        found = [id for id, (_, result) in results.items() if result == "yes"]
+
+        if len(found) > 1:
+            return None, "several_words_found", results
+
+        if not found:
+            return None, "no_word_found", results
+
+        if any(
+            result == "maybe" for id, (_, result) in results.items() if id != found[0]
+        ):
+            return None, "possible_other_word", results
+
+        return found[0], "moved", results
+
+    def best_sense(self, synset_id, sentence):
+        """
+        Return the sense to move the example to when exactly one word
+        appears in the sentence and all other words clearly do not.
+        """
+        senses = self.senses_by_synset.get(synset_id)
+
+        if not senses:
+            return None, None, {}
+
+        return self.best_match(senses, sentence)
+
+    def write_csv(self, filename, header, rows):
+        """Write rows to a CSV file in the migration log folder."""
+        path = self.log_directory / filename
+
+        with path.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            writer.writerows(rows)
+
+        return path
 
     # ------------------------------------------------------------------
     # Languages
@@ -1112,6 +1163,15 @@ class Command(BaseCommand):
             ]
             for old_sense_id, keys in old_sense_keys.items()
         }
+        # new synset id:[(new sense id, word text), ...]
+        # used to link each synset example to the one sense whose word it uses
+        self.senses_by_synset = defaultdict(list)
+        word_text_by_id = {word_id: key[0] for key, word_id in self.word_id_map.items()}
+
+        for (synset_id, word_id), sense_id in self.sense_key_ids.items():
+            self.senses_by_synset[synset_id].append(
+                (sense_id, word_text_by_id[word_id])
+            )
 
         print("Words:")
         print(f"  Migrated: {migrated_words}")
@@ -1135,34 +1195,44 @@ class Command(BaseCommand):
         print("Migrating examples...")
         self.split_example_rows = []
         self.split_example_synset_ids = set()
+        self.moved_examples = []
+        self.moved_seen = set()
+        self.moved_example_rows = []
         # Give synset same shape as sense target (self.sense_targets)
         synset_targets = {
             old_id: [(new_id, new_id, None)]
             for old_id, new_id in self.synset_id_map.items()
         }
 
-        sources = (
-            ("synset", SynsetExample, synset_targets),
-            ("sense", SenseExample, self.sense_targets),
+        # Synset examples first
+        self.migrate_example_table(conn, "synset", SynsetExample, synset_targets)
+        # Migrate synset examples to sense examples
+        for batch in batched(self.moved_examples, BATCH_SIZE):
+            self.insert_batch(
+                "examples_synset_moved_to_sense", SenseExample, list(batch)
+            )
+
+        self.migrate_example_table(conn, "sense", SenseExample, self.sense_targets)
+
+        self.write_csv(
+            "review_split_examples.csv",
+            [
+                "synset_id",
+                "original_word",
+                "word",
+                "sense_id",
+                "contains_word",
+                "reason",
+                "example",
+            ],
+            self.split_example_rows,
         )
 
-        for table, model, id_map in sources:
-            self.migrate_example_table(conn, table, model, id_map)
-
-        path = self.log_directory / "review_split_examples.csv"
-        with path.open("w") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "synset_id",
-                    "original_word",
-                    "word",
-                    "sense_id",
-                    "contains_word",
-                    "example",
-                ]
-            )
-            writer.writerows(self.split_example_rows)
+        self.write_csv(
+            "review_synset_examples_to_sense.csv",
+            ["synset_id", "decision", "moved_to_sense_id", "word_results", "example"],
+            self.moved_example_rows,
+        )
 
     def migrate_example_table(self, conn, table, model, id_map):
         stage = f"examples_{table}"
@@ -1185,7 +1255,7 @@ class Command(BaseCommand):
         example_max_len = model._meta.get_field("text").max_length
         migrated = 0
         skipped = 0
-        seen = set()
+        seen = set(self.moved_seen) if table == "sense" else set()
         batch = []
 
         def flush():
@@ -1215,9 +1285,9 @@ class Command(BaseCommand):
                 continue
 
             # [(sense/synset id, synset id, word), ...]
-            targets = id_map.get(old_id)
+            targets = id_map.get(old_id, [])
 
-            if targets is None:
+            if not targets:
                 skipped += 1
 
                 self.log_skip(
@@ -1243,6 +1313,77 @@ class Command(BaseCommand):
                     },
                 )
                 continue
+
+            if table == "synset":
+                synset_id = targets[0][0]
+                sense_id, reason, results = self.best_sense(synset_id, example_text)
+
+                if reason:
+                    # Used for logging only:
+                    # Count every decision in the summary
+                    self.extra_counts[(stage, f"synset_example: {reason}")] += 1
+                    self.moved_example_rows.append(
+                        [
+                            synset_id,
+                            reason,
+                            sense_id or "",
+                            "; ".join(
+                                f"{word}: {result}" for word, result in results.values()
+                            ),
+                            example_text,
+                        ]
+                    )
+
+                if sense_id is not None:
+                    key = (sense_id, example_text)
+
+                    if key in self.moved_seen:
+                        skipped += 1
+                        self.log_skip(
+                            stage=stage,
+                            reason="duplicate_after_cleaning",
+                            row=row,
+                            context={"cleaned_example_text": example_text},
+                        )
+                        continue
+
+                    self.moved_seen.add(key)
+                    self.moved_examples.append(
+                        (
+                            row,
+                            SenseExample(sense_id=sense_id, text=example_text),
+                            {"new_id": sense_id, "example": example_text},
+                        )
+                    )
+                    continue
+            # A sense example of a split word: keep it only on the part the sentence
+            # clearly uses; if that's unclear, keep it on every part.
+            if table == "sense" and len(targets) > 1 and old_id in self.split_words:
+                sense_word_list = [(sense_id, part) for sense_id, _, part in targets]
+                best_id, reason, results = self.best_match(
+                    sense_word_list, example_text
+                )
+
+                self.extra_counts[(stage, f"split_sense_example:{reason}")] += 1
+
+                for sense_id, synset_id, part in targets:
+                    self.split_example_rows.append(
+                        [
+                            synset_id,
+                            self.split_words[old_id],
+                            part,
+                            sense_id,
+                            results[sense_id][1],
+                            reason,
+                            example_text,
+                        ]
+                    )
+                if best_id is not None:
+                    # Clearly one word: only that sense gets the example
+                    targets = [target for target in targets if target[0] == best_id]
+                else:
+                    # Unsure: copied to every part, so an editor should review it
+                    self.split_example_synset_ids.add(targets[0][1])
             # check if synset/sense id + example_text already seen
             new_targets = [
                 target for target in targets if (target[0], example_text) not in seen
@@ -1273,21 +1414,6 @@ class Command(BaseCommand):
                 self.extra_counts[(stage, "extra_copies_from_split")] += (
                     len(new_targets) - 1
                 )
-
-            # Copied to several words: flag it for review.
-            if table == "sense" and len(targets) > 1 and old_id in self.split_words:
-                for sense_id, synset_id, part in targets:
-                    self.split_example_rows.append(
-                        [
-                            synset_id,
-                            self.split_words[old_id],
-                            part,
-                            sense_id,
-                            self.word_in_sentence(part, example_text),
-                            example_text,
-                        ]
-                    )
-                    self.split_example_synset_ids.add(synset_id)
 
             if len(batch) >= BATCH_SIZE:
                 flush()

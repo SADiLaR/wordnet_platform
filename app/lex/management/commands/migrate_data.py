@@ -750,12 +750,12 @@ class Command(BaseCommand):
             {"name": "verb", "short_name": "v"},
             {"name": "adjective", "short_name": "a"},
             {"name": "adverb", "short_name": "r"},
-            {"name": "unknown", "short_name": "u"},
-            {"name": "multiple", "short_name": "m"},
+            {"name": "unknown", "short_name": "u", "allowed": False},
+            {"name": "multiple", "short_name": "m", "allowed": False},
         ]
 
         for pos in parts_of_speech:
-            PartOfSpeech.objects.create(short_name=pos["short_name"], name=pos["name"])
+            PartOfSpeech.objects.create(**pos)
 
     def build_pos_id_map(self):
         print("Building POS map...")

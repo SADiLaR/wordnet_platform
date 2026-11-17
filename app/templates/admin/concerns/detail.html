@@ -10,14 +10,14 @@
 {% block content %}
 <div id="content-main">
     <p>
-        <a href="{% url 'concerns_report' %}">
+        <a href="{% url 'concerns_report' %}{% if selected_wordnet %}?wordnet={{ selected_wordnet.pk }}{% endif %}">
             {% trans "Back to concerns" %}</a>
     </p>
     <h1>{{ concern.name }}</h1>
-    {% if wordnet %}
+    {% if selected_wordnet %}
         <p>
             <strong>{% trans "Wordnet:" %}</strong>
-            {{ wordnet.name }}
+            {{ selected_wordnet.name }}
         </p>
     {% endif %}
     <div id="changelist" class="module filtered">
@@ -46,7 +46,7 @@
                     {% elif page == page_obj.number %}
                         <span class="this-page">{{ page }}</span>
                     {% else %}
-                    <a href="?page={{ page }}{% if wordnet %}&wordnet={{ wordnet.pk }}{% endif %}">
+                    <a href="?page={{ page }}{% if selected_wordnet %}&wordnet={{ selected_wordnet.pk }}{% endif %}">
                         {{ page }}
                     </a>
                     {% endif %}
@@ -68,7 +68,7 @@
                         <a href="?">{% trans "All" %}</a>
                     </li>
                     {% for wordnet in wordnets %}
-                        <li {% if selected_wordnet == wordnet.pk|stringformat:"s" %}class="selected"{% endif %}>
+                        <li {% if selected_wordnet == wordnet %}class="selected"{% endif %}>
                             <a href="?wordnet={{ wordnet.pk }}">{{ wordnet.name }}</a>
                         </li>
                     {% endfor %}

@@ -97,13 +97,15 @@ def concerns_report(request):
 def concerns_detail(request, model_name, concern_key):
     model = CONCERN_MODELS[model_name]
     concern = _get_concern(model, concern_key)
-    wordnets = Wordnet.objects.all().order_by("name")
-    wordnet = request.GET.get("wordnet")
+    wordnets = list(Wordnet.objects.order_by("name"))
+    selected_wordnet = next(
+        (w for w in wordnets if str(w.pk) == request.GET.get("wordnet")), None
+    )
 
     queryset = concern["qs"]
 
-    if wordnet:
-        queryset = _filter_concern_by_wordnet(queryset, model_name, wordnet)
+    if selected_wordnet:
+        queryset = _filter_concern_by_wordnet(queryset, model_name, selected_wordnet.pk)
 
     paginator = Paginator(queryset, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -125,7 +127,7 @@ def concerns_detail(request, model_name, concern_key):
             "concern": concern,
             "items": items,
             "page_obj": page_obj,
-            "selected_wordnet": wordnet,
+            "selected_wordnet": selected_wordnet,
             "wordnets": wordnets,
             "page_range": page_range,
         },

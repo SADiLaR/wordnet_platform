@@ -36,6 +36,12 @@ from lex.models import (
 
 # Shared query counts for assertNumQueries. Update them here when a view's
 # queries change
+
+# Every view test in EditorViewTest is logged in:
+# fetch session
+# fetch user
+LOGIN_QUERIES = 2
+
 # One exists() per concern (synset, word and relation)
 CONCERN_CHECKS = sum(
     len(model.objects.concerns()) for model in (Synset, Word, Relation)
@@ -170,8 +176,76 @@ class FooterTest(TestCase):
         self.assertTemplateUsed(response, "registration/login.html")
 
 
+class LoginRequiredTest(TestCase):
+    def setUp(self):
+        language = Language.objects.create(iso_code="afr", name="Afrikaans")
+        wordnet = Wordnet.objects.create(name="Toets Wordnet", language=language)
+        pos = PartOfSpeech.objects.create(name="noun")
+        self.synset = Synset.objects.create(
+            definition="'n Toets synset", wordnet=wordnet, pos=pos
+        )
+        self.detail_url = reverse("editor:synset_detail", kwargs={"pk": self.synset.pk})
+        self.definition_url = reverse(
+            "editor:synset_definition", kwargs={"pk": self.synset.pk}
+        )
+
+    def test_page_redirects_anonymous_user_to_login(self):
+        # No queries: without a session cookie, there is no session or user to load
+        with self.assertNumQueries(0):
+            response = self.client.get(self.detail_url)
+
+        # Also fetches the login page, so it must be open
+        self.assertRedirects(response, f"{reverse('login')}?next={self.detail_url}")
+
+    def test_htmx_redirects_anonymous_user_to_login_and_saves_nothing(self):
+        self.assertEqual(self.synset.definition, "'n Toets synset")
+
+        with self.assertNumQueries(0):
+            response = self.client.post(
+                self.definition_url,
+                {"definition": "'n Nuwe definisie"},
+                headers={
+                    "HX-Request": "true",
+                    "HX-Current-URL": f"http://testserver{self.detail_url}",
+                },
+            )
+
+        # After login, back to the synset page, not to the POST-only definition view
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["HX-Redirect"], f"{reverse('login')}?next={self.detail_url}"
+        )
+        self.synset.refresh_from_db()
+        self.assertEqual(self.synset.definition, "'n Toets synset")
+
+    def test_htmx_login_redirect_ignores_page_on_other_site(self):
+        with self.assertNumQueries(0):
+            response = self.client.post(
+                self.definition_url,
+                {"definition": "'n Nuwe definisie"},
+                headers={
+                    "HX-Request": "true",
+                    "HX-Current-URL": f"https://example.com{self.detail_url}",
+                },
+            )
+
+        self.assertEqual(response["HX-Redirect"], reverse("login"))
+
+    def test_health_is_open(self):
+        # The front page and About are open too: FrontPageTest and AboutPageTest
+        # request them without logging in
+        with self.assertNumQueries(0):
+            response = self.client.get(reverse("health"))
+
+        self.assertEqual(response.status_code, 200)
+
+
 class EditorViewTest(TestCase):
     def setUp(self):
+        # Every editor view needs login, except a few open pages
+        self.user = User.objects.create_user(username="testuser")
+        self.client.force_login(self.user)
+
         # No wordnet has pk 0, so none of the test wordnets is the source wordnet
         # unless a test makes it one. Otherwise, when a test runs on its own, its
         # first wordnet gets pk 1, the default, and its synsets are read-only.
@@ -304,11 +378,12 @@ class EditorViewTest(TestCase):
         # The Source column's link checked below
         self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
         # Queries:
+        # LOGIN_QUERIES
         # count the synsets, for the pagination
         # fetch the page of synsets
         # list the wordnets, for the filters
         # list the parts of speech, for the filters
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
             response = self.client.get(self._get_browse_url())
         self.assertEqual(response.status_code, 200)
         # The link to create a synset only appears after a search
@@ -356,7 +431,7 @@ class EditorViewTest(TestCase):
         self.assertNotIn(self.synset_b, qs)
 
     def test_browse_synsets_search(self):
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
             response = self.client.get(self._get_browse_url(), {"search": "toets"})
         self.assertEqual(response.status_code, 200)
 
@@ -367,11 +442,12 @@ class EditorViewTest(TestCase):
             "pos": [self.pos_verb.pk],
         }
         # Queries:
+        # LOGIN_QUERIES
         # fetch the ticked part of speech, to check it's a choice
         # fetch the ticked wordnets, to check they're choices
         # then as in test_browse_synsets
         # (the link adds none: it's built from the URL)
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(LOGIN_QUERIES + 6):
             response = self.client.get(self._get_browse_url(), params)
         url = urlsplit(response.context["new_synset_url"])
         self.assertEqual(url.path, self._get_new_synset_url())
@@ -414,7 +490,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(qs.count(), 3)
         self.assertIn(self.synset_a, qs)
         self.assertNotIn(self.synset_d, qs)
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(LOGIN_QUERIES + 5):
             response = self.client.get(self._get_browse_url(), data)
         self.assertEqual(response.status_code, 200)
 
@@ -430,7 +506,7 @@ class EditorViewTest(TestCase):
         self.assertIn(self.synset_a, qs)
 
     def test_queue_by_wordnet_existing(self):
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self.client.get(self._get_queue_wn_url())
         self.assertEqual(response.status_code, 200)
 
@@ -442,7 +518,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_queue_existing(self):
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.get(self._get_queue_url())
         self.assertEqual(response.status_code, 200)
 
@@ -523,9 +599,10 @@ class EditorViewTest(TestCase):
         self.synset_a.refresh_from_db()
         self.assertEqual(self.synset_a.display_name, "alfa, bravo, charlie, ...")
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # fetch non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 1):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 1):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["synset"], self.synset_a)
@@ -553,17 +630,19 @@ class EditorViewTest(TestCase):
         SynsetExample.objects.create(synset=self.synset_a, text="")
         self.assertTrue(self.synset_a.synsetexample_set.exists())
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # (no Princeton ID, so no source synset guess)
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertIsNone(self._element_with_class(response, "synset-examples"))
 
     def test_synset_detail_pos_not_allowed(self):
         synset = self._synset_with_pos_not_allowed()
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES):
             response = self.client.get(self._get_synset_detail_url(synset))
         # No word search, but the reason. The same text as the views' error.
         self.assertNotContains(response, self._get_search_words_url(synset))
@@ -572,15 +651,16 @@ class EditorViewTest(TestCase):
     def test_synset_detail_existing_with_princeton(self):
         self.assertEqual(self.synset_f.display_name, "")
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 1):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 1):
             response = self.client.get(self._get_synset_detail_url(self.synset_f))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self._heading(response), "Synset (no words)")
 
     def test_synset_detail_non_existing(self):
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.get(self._get_synset_detail_url_nonexist())
         self.assertEqual(response.status_code, 404)
 
@@ -614,23 +694,25 @@ class EditorViewTest(TestCase):
 
     def test_guess_source_synset_view_existing(self):
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # relations of synset_d
         # senses of synset_d
         # synset examples of synset_d
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 4):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 4):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_f))
             self.assertEqual(response.context["source_synset"], self.synset_d)
 
     def test_copied_source_synset(self):
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # relations of synset_d
         # senses of synset_d
         # synset examples of synset_d
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 3):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 3):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
             self.assertEqual(response.context["source_synset"], self.synset_d)
@@ -645,9 +727,10 @@ class EditorViewTest(TestCase):
         self.assertIsNone(self.synset_a.copied_from_id)
         self.assertIsNone(self.synset_a.princeton_id)
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # (no source synset: nothing linked, and no Princeton ID to guess from)
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES):
             response = self.client.get(self._get_synset_detail_url(self.synset_a))
         self.assertContains(response, "No relations.", count=1)
         # The working card can still add one
@@ -670,11 +753,12 @@ class EditorViewTest(TestCase):
         SynsetExample.objects.create(synset=self.synset_e, text="Werkvoorbeeld")
         SynsetExample.objects.create(synset=self.synset_d, text="Bronvoorbeeld")
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # relations of synset_d (_source_synset_context)
         # senses of synset_d (none, so no example prefetch)
         # synset examples of synset_d
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 3):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 3):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_e))
         self.assertContains(response, escape(self.synset_d.definition))
@@ -747,13 +831,14 @@ class EditorViewTest(TestCase):
         english = Language.objects.create(iso_code="eng", name="English")
         Wordnet.objects.filter(pk=self.wordnet_2.pk).update(language=english)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a (with pos, wordnet__language)
         # fetch synset_d (target, with pos, wordnet__language)
         # update synset_a
         # insert history record
         # relations of synset_d (_source_synset_context)
         # senses of synset_d (none, so no example prefetch)
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self._post_link_synset(self.synset_a, self.synset_d.pk)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_source_synset.html")
@@ -780,13 +865,14 @@ class EditorViewTest(TestCase):
         )
         self.assertEqual(self.synset_a.pos_id, noun_source.pos_id)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a (with pos, wordnet__language)
         # fetch noun_source (target, with pos, wordnet__language)
         # update synset_a
         # insert history record
         # relations of noun_source (_source_synset_context)
         # senses of noun_source (none, so no example prefetch)
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self._post_link_synset(self.synset_a, noun_source.pk)
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Different parts of speech")
@@ -796,9 +882,10 @@ class EditorViewTest(TestCase):
         self.assertNotEqual(self.synset_c.wordnet_id, self.wordnet_2.pk)
         self.assertIsNone(self.synset_a.copied_from_id)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a (with pos, wordnet__language)
         # fetch synset_c (target, filtered on the source wordnet: no match)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self._post_link_synset(self.synset_a, self.synset_c.pk)
         self.assertEqual(response.status_code, 404)
         self.synset_a.refresh_from_db()
@@ -809,9 +896,10 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_d.wordnet_id, self.wordnet_2.pk)
         self.assertIsNone(self.synset_d.copied_from_id)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d (with pos, wordnet__language)
         # fetch synset_d as target (excluded: no match)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self._post_link_synset(self.synset_d, self.synset_d.pk)
         self.assertEqual(response.status_code, 404)
         self.synset_d.refresh_from_db()
@@ -821,6 +909,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_e.copied_from_id, self.synset_d.pk)
         history_count = self.synset_e.history.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_e (with pos, wordnet__language)
         # fetch synset_d (target, with pos, wordnet__language)
         # (no update or history record: nothing changed)
@@ -828,7 +917,7 @@ class EditorViewTest(TestCase):
         # senses of synset_d (none, so no example prefetch)
         # Only this count checks that the card reuses the fetched target, rather than
         # loading synset_e's source, its wordnet, language and POS again
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(LOGIN_QUERIES + 5):
             response = self._post_link_synset(self.synset_e, self.synset_d.pk)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["source_synset"], self.synset_d)
@@ -845,12 +934,13 @@ class EditorViewTest(TestCase):
         self.assertIsNone(self.synset_e.princeton_id)
         history_count = self.synset_e.history.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_e (with pos, wordnet__language)
         # (an empty target_pk: no target to fetch)
         # update synset_e
         # insert history record
         # (no guess: no Princeton ID)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self._post_link_synset(self.synset_e, "")
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_source_synset.html")
@@ -876,6 +966,7 @@ class EditorViewTest(TestCase):
         with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
             self.assertEqual(_guess_source_synset(self.synset_f), self.synset_d)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_f (with pos, wordnet__language)
         # update synset_f
         # insert history record
@@ -883,7 +974,7 @@ class EditorViewTest(TestCase):
         # relations of synset_d (_source_synset_context)
         # synset examples of synset_d (_synset_card_body.html)
         # senses of synset_d (none, so no example prefetch)
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self._post_link_synset(self.synset_f, "")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["source_synset"], self.synset_d)
@@ -897,10 +988,11 @@ class EditorViewTest(TestCase):
         self.assertIsNone(self.synset_a.princeton_id)
         history_count = self.synset_a.history.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a (with pos, wordnet__language)
         # (no update or history record: nothing was linked)
         # (no guess: no Princeton ID)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self._post_link_synset(self.synset_a, "")
         self.assertEqual(response.status_code, 200)
         self._assert_source_card(response, "none")
@@ -924,6 +1016,7 @@ class EditorViewTest(TestCase):
             )
         )
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d (with pos, wordnet, language, and the same for copied_from)
         # relations of synset_d (_synset_context)
         # copies of synset_d, with their wordnets (_copied_synsets)
@@ -932,7 +1025,7 @@ class EditorViewTest(TestCase):
         # senses of synset_d (none, so no example prefetch)
         # (no concern checks: a source synset gets no QA warnings)
         # (no source card: no guess, no source relations or senses)
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(LOGIN_QUERIES + 6):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(self.synset_d))
         # Read-only: the working card has no edit controls, and there's no QA card,
@@ -1030,6 +1123,7 @@ class EditorViewTest(TestCase):
         # The source wordnet and one other, which can have a stub
         self.assertEqual(set(Wordnet.objects.all()), {self.wordnet_2, self.wordnet})
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with pos, wordnet, language, and the same for copied_from)
         # relations of synset (_synset_context)
         # copies of synset (_copied_synsets)
@@ -1038,7 +1132,7 @@ class EditorViewTest(TestCase):
         # senses of synset (none, so no example prefetch)
         # wordnets without a copy, for the wordnet dropdown (template)
         # allowed parts of speech, for the POS dropdown (template)
-        with self.assertNumQueries(8):
+        with self.assertNumQueries(LOGIN_QUERIES + 8):
             with self.settings(SOURCE_WORDNET_ID=self.wordnet_2.pk):
                 response = self.client.get(self._get_synset_detail_url(synset))
         self.assertEqual(response.context["copied_synsets"], [])
@@ -1083,13 +1177,14 @@ class EditorViewTest(TestCase):
         # The user chose a POS other than the source's
         self.assertNotEqual(self.synset_d.pos, self.pos_noun)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d, checking it's in the source wordnet
         # fetch new_wordnet, checking it's not the source wordnet (form)
         # fetch the POS, checking it's allowed (form)
         # look for a copy of synset_d in new_wordnet (none)
         # insert the stub
         # insert its history record
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(LOGIN_QUERIES + 6):
             response = self._post_create_stub(
                 self.synset_d, new_wordnet.pk, self.pos_noun.pk
             )
@@ -1119,11 +1214,12 @@ class EditorViewTest(TestCase):
         )
         synset_count = Synset.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d, checking it's in the source wordnet
         # fetch new_wordnet, checking it's not the source wordnet (form)
         # fetch the POS, checking it's allowed (form)
         # look for a copy of synset_d in new_wordnet (found: migrated)
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
             response = self._post_create_stub(
                 self.synset_d, new_wordnet.pk, self.pos_verb.pk
             )
@@ -1149,11 +1245,12 @@ class EditorViewTest(TestCase):
         )
         synset_count = Synset.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d, checking it's in the source wordnet
         # fetch new_wordnet, checking it's not the source wordnet (form)
         # fetch the POS, checking it's allowed (form)
         # look for a copy of synset_d in new_wordnet (found, with another POS)
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
             response = self._post_create_stub(
                 self.synset_d, new_wordnet.pk, self.pos_noun.pk
             )
@@ -1180,10 +1277,11 @@ class EditorViewTest(TestCase):
         unknown = PartOfSpeech.objects.create(name="unknown", allowed=False)
         synset_count = Synset.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d, checking it's in the source wordnet
         # fetch new_wordnet, checking it's not the source wordnet (form)
         # fetch the POS among the allowed ones (form; not found)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self._post_create_stub(self.synset_d, new_wordnet.pk, unknown.pk)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Synset.objects.count(), synset_count)
@@ -1193,8 +1291,9 @@ class EditorViewTest(TestCase):
         self.assertNotEqual(self.synset_a.wordnet_id, self.wordnet_2.pk)
         synset_count = Synset.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a in the source wordnet (not found)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self._post_create_stub(
                 self.synset_a, self.wordnet.pk, self.pos_noun.pk
             )
@@ -1204,10 +1303,11 @@ class EditorViewTest(TestCase):
     def test_create_stub_into_source_wordnet(self):
         synset_count = Synset.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_d, checking it's in the source wordnet
         # fetch the source wordnet, excluded as a target (form; not found)
         # fetch the POS, checking it's allowed (form)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self._post_create_stub(
                 self.synset_d, self.wordnet_2.pk, self.pos_verb.pk
             )
@@ -1235,9 +1335,10 @@ class EditorViewTest(TestCase):
         pos_adjective = PartOfSpeech.objects.create(name="adjective")
         PartOfSpeech.objects.create(name="multiple", allowed=False)
         # Queries:
+        # LOGIN_QUERIES
         # list the wordnets, for the form
         # list the parts of speech, for the form
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self._get_new_synset_page()
         form = response.context["form"]
         self.assertQuerySetEqual(
@@ -1250,7 +1351,7 @@ class EditorViewTest(TestCase):
     def test_new_synset_page_prefilled(self):
         # The browse page's link passes on its filters
         # Queries: as in test_new_synset_page
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self._get_new_synset_page(
                 {"wordnet": self.wordnet.pk, "pos": self.pos_verb.pk}
             )
@@ -1262,11 +1363,12 @@ class EditorViewTest(TestCase):
     def test_new_synset(self):
         existing_pks = list(Synset.objects.values_list("pk", flat=True))
         # Queries:
+        # LOGIN_QUERIES
         # fetch the chosen wordnet, checking it's not the source wordnet
         # fetch the chosen part of speech
         # insert the synset
         # insert its history record
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
             response = self._post_new_synset(
                 {"wordnet": self.wordnet.pk, "pos": self.pos_verb.pk}
             )
@@ -1285,11 +1387,12 @@ class EditorViewTest(TestCase):
     def test_new_synset_in_source_wordnet(self):
         synset_count = Synset.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch the chosen wordnet, excluding the source wordnet (not found)
         # fetch the chosen part of speech
         # list the wordnets, for the form shown again
         # list the parts of speech, for the form shown again
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
             response = self._post_new_synset(
                 {"wordnet": self.wordnet_2.pk, "pos": self.pos_verb.pk}
             )
@@ -1300,18 +1403,18 @@ class EditorViewTest(TestCase):
         self.assertContains(response, escape(form.errors["wordnet"][0]))
 
     def test_status_htmx_get(self):
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.get(self._get_synset_status_htmx_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context.get("warnings"))
 
     def test_status_htmx_get_nonexist(self):
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.get(self._get_synset_status_htmx_url_nonexist())
         self.assertEqual(response.status_code, 404)
 
     def test_status_htmx_post_non_complete(self):
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_synset_status_htmx_url(self.synset_a),
                 {"new_status": Synset.Status.DRAFT},
@@ -1324,7 +1427,7 @@ class EditorViewTest(TestCase):
 
     def test_status_htmx_post_complete_triggers_warning(self):
         with self.subTest("no words, no relations"):
-            with self.assertNumQueries(3):
+            with self.assertNumQueries(LOGIN_QUERIES + 3):
                 response = self.client.post(
                     self._get_synset_status_htmx_url(self.synset_a),
                     {"new_status": Synset.Status.COMPLETE},
@@ -1334,7 +1437,7 @@ class EditorViewTest(TestCase):
             self.assertEqual(self.synset_a.status, Synset.Status.STUB)
 
         with self.subTest("missing usage example"):
-            with self.assertNumQueries(5):
+            with self.assertNumQueries(LOGIN_QUERIES + 5):
                 response = self.client.post(
                     self._get_synset_status_htmx_url(self.synset_c),
                     {"new_status": Synset.Status.COMPLETE},
@@ -1344,7 +1447,7 @@ class EditorViewTest(TestCase):
             self.assertEqual(self.synset_c.status, Synset.Status.STUB)
 
     def test_status_htmx_post_complete_force_save(self):
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_synset_status_htmx_url(self.synset_a),
                 {"new_status": Synset.Status.COMPLETE, "force_save": True},
@@ -1355,7 +1458,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_a.status, Synset.Status.COMPLETE)
 
     def test_status_htmx_post_complete_no_warning_when_complete(self):
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self.client.post(
                 self._get_synset_status_htmx_url(self.synset_b),
                 {"new_status": Synset.Status.COMPLETE},
@@ -1367,7 +1470,14 @@ class EditorViewTest(TestCase):
 
     def test_definition_post(self):
         new_def = "a complete new definition"
-        with self.assertNumQueries(3):
+        self.assertEqual(self.synset_a.history.count(), 1)
+
+        # Queries:
+        # LOGIN_QUERIES
+        # fetch synset_a
+        # update synset_a
+        # insert history record
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_synset_definition_url(self.synset_a),
                 {"definition": new_def},
@@ -1376,16 +1486,21 @@ class EditorViewTest(TestCase):
         self.synset_a.refresh_from_db()
         self.assertEqual(self.synset_a.definition, new_def)
         self.assertEqual(self.synset_a.status, Synset.Status.DRAFT)
+        # HistoryRequestMiddleware records who made each edit, which is one reason
+        # the editor requires login
+        self.assertEqual(self.synset_a.history.count(), 2)
+        self.assertEqual(self.synset_a.history.latest().history_user, self.user)
 
     def test_definition_post_invalid(self):
         old_def = self.synset_e.definition
         self.assertTrue(old_def)
         # Queries (the same as loading the page):
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # relations of synset_d (_source_synset_context)
         # senses of synset_d (none, so no example prefetch)
         # synset examples of synset_d
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 3):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 3):
             response = self.client.post(
                 self._get_synset_definition_url(self.synset_e),
                 {"definition": ""},
@@ -1397,7 +1512,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_e.definition, old_def)
 
     def test_definition_post_non_existing(self):
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.post(
                 self._get_synset_definition_url_nonexist(),
                 {"definition": "a new definition"},
@@ -1405,7 +1520,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_definition_get_not_allowed(self):
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.get(
                 self._get_synset_definition_url(self.synset_a),
             )
@@ -1417,12 +1532,13 @@ class EditorViewTest(TestCase):
             text="Test synset example",
         )
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset
         # fetch synset example
         # DELETE example
         # INSERT synset example history
         # fetch updated synset example
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(LOGIN_QUERIES + 5):
             response = self.client.post(
                 self._get_delete_synset_example_url(self.synset_a, synset_example)
             )
@@ -1431,9 +1547,10 @@ class EditorViewTest(TestCase):
 
     def test_suggest_relation_htmx_get_no_type(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset
         # fetch types (evaluated by _add_relation_new.html)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self.client.get(self._get_add_relation_form_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "editor/snippets/_add_relation_new.html")
@@ -1445,9 +1562,10 @@ class EditorViewTest(TestCase):
 
     def test_suggest_relation_htmx_get_with_type(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset
         # types not evaluated by _add_relation.html
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self.client.get(
                 self._get_add_relation_form_url(self.synset_a),
                 {"type": self.relation_type.pk, "direction": "outgoing"},
@@ -1459,9 +1577,10 @@ class EditorViewTest(TestCase):
 
     def test_search_synset(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset
         # search query
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self.client.get(
                 self._get_search_synset_url(self.synset_a.wordnet_id),
                 {"q": "toets"},
@@ -1473,6 +1592,7 @@ class EditorViewTest(TestCase):
     def test_add_relation_htmx_post_outgoing(self):
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a
         # fetch synset_b (target)
         # fetch rel_type
@@ -1483,7 +1603,7 @@ class EditorViewTest(TestCase):
         # status save
         # history (synset)
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(9 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 9 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1502,6 +1622,7 @@ class EditorViewTest(TestCase):
 
     def test_add_relation_htmx_post_incoming(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a
         # fetch synset_b (target)
         # fetch rel_type
@@ -1512,7 +1633,7 @@ class EditorViewTest(TestCase):
         # status save
         # history (synset)
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(9 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 9 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1530,10 +1651,11 @@ class EditorViewTest(TestCase):
 
     def test_add_relation_htmx_post_invalid_direction(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a
         # fetch synset_b (target)
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(2 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 2 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1547,10 +1669,11 @@ class EditorViewTest(TestCase):
 
     def test_add_relation_htmx_post_different_wordnet(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a
         # fetch synset_d (target)
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(2 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 2 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1564,10 +1687,11 @@ class EditorViewTest(TestCase):
 
     def test_add_relation_htmx_post_self(self):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_a
         # fetch synset_a (target, same pk)
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(2 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 2 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_a),
                 {
@@ -1582,12 +1706,13 @@ class EditorViewTest(TestCase):
     def test_add_relation_htmx_post_circular(self):
         # synset_c → synset_b (hyper) exists; adding synset_b → synset_c should be caught
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset_b
         # fetch synset_c (target)
         # fetch rel_type
         # circular exists() → True
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(4 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 4 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 self._get_add_relation_url(self.synset_b),
                 {
@@ -1609,6 +1734,7 @@ class EditorViewTest(TestCase):
         )
         self.assertEqual(self.synset_c.status, Synset.Status.STUB)
         # Queries:
+        # LOGIN_QUERIES
         # get synset
         # get relation
         # delete relation
@@ -1616,7 +1742,7 @@ class EditorViewTest(TestCase):
         # update synset status
         # create historical synset
         # RELATIONS_SECTION_QUERIES
-        with self.assertNumQueries(6 + RELATIONS_SECTION_QUERIES):
+        with self.assertNumQueries(LOGIN_QUERIES + 6 + RELATIONS_SECTION_QUERIES):
             response = self.client.post(
                 reverse(
                     "editor:delete_relation_htmx",
@@ -1641,7 +1767,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_clear_htmx(self):
-        with self.assertNumQueries(0):
+        with self.assertNumQueries(LOGIN_QUERIES):
             response = self.client.get(self._get_clear_url())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"")
@@ -1654,10 +1780,11 @@ class EditorViewTest(TestCase):
 
     def _search_words(self, q, synset=None):
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with wordnet, pos)
         # search words
         # look for the exact text
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             return self.client.get(
                 self._get_search_words_url(synset or self.synset_a), {"q": q}
             )
@@ -1679,7 +1806,7 @@ class EditorViewTest(TestCase):
 
     def test_search_words_htmx_no_query(self):
         # Returns empty response when q is missing
-        with self.assertNumQueries(0):
+        with self.assertNumQueries(LOGIN_QUERIES):
             response = self.client.get(self._get_search_words_url(self.synset_a))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"")
@@ -1699,7 +1826,7 @@ class EditorViewTest(TestCase):
         self.assertNotContains(response, self.word_1.text)
 
     def test_search_words_htmx_only_spaces(self):
-        with self.assertNumQueries(0):
+        with self.assertNumQueries(LOGIN_QUERIES):
             response = self.client.get(
                 self._get_search_words_url(self.synset_a), {"q": "   "}
             )
@@ -1763,6 +1890,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_a.display_name, "Toets")
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with wordnet, pos)
         # fetch word (with language, pos)
         # get_or_create sense check (SELECT)
@@ -1776,7 +1904,7 @@ class EditorViewTest(TestCase):
         # INSERT synset history
         # fetch senses with words (context)
         # fetch sense examples (context)
-        with self.assertNumQueries(13):
+        with self.assertNumQueries(LOGIN_QUERIES + 13):
             response = self.client.post(
                 self._get_add_sense_url(self.synset_a),
                 {"word_pk": self.word_1.pk},
@@ -1800,7 +1928,7 @@ class EditorViewTest(TestCase):
         other_word = Word.objects.create(
             text="ikhaya", pos=self.pos_noun, language=other_language
         )
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_add_sense_url(self.synset_a),
                 {"word_pk": other_word.pk},
@@ -1821,7 +1949,7 @@ class EditorViewTest(TestCase):
             pos=self.pos_verb,
             language=self.wordnet.language,
         )
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_add_sense_url(self.synset_a),
                 {"word_pk": wrong_pos_word.pk},
@@ -1839,12 +1967,13 @@ class EditorViewTest(TestCase):
             Sense.objects.filter(word=self.word_1, synset=self.synset_c).count(), 1
         )
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with wordnet, pos)
         # fetch word (with pos)
         # get_or_create sense check (SELECT)
         # fetch senses with words (context)
         # fetch sense examples (context)
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(LOGIN_QUERIES + 5):
             response = self.client.post(
                 self._get_add_sense_url(self.synset_c),
                 {"word_pk": self.word_1.pk},
@@ -1863,6 +1992,7 @@ class EditorViewTest(TestCase):
         self.assertFalse(Word.objects.filter(text__startswith="sweeftuig").exists())
         self.assertEqual(self.synset_a.status, Synset.Status.STUB)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with wordnet, pos)
         # get_or_create word check (SELECT)
         # SAVEPOINT
@@ -1880,7 +2010,7 @@ class EditorViewTest(TestCase):
         # INSERT synset history
         # fetch senses with words (context)
         # fetch sense examples (context)
-        with self.assertNumQueries(17):
+        with self.assertNumQueries(LOGIN_QUERIES + 17):
             response = self.client.post(
                 self._get_add_sense_url(self.synset_a),
                 {"word_text": " sweeftuig   vis "},
@@ -1897,7 +2027,7 @@ class EditorViewTest(TestCase):
     def test_add_sense_htmx_new_word_keeps_case_variant_separate(self):
         self._new_word("iSonto")
         # Queries: as in test_add_sense_htmx_new_word
-        with self.assertNumQueries(17):
+        with self.assertNumQueries(LOGIN_QUERIES + 17):
             self.client.post(
                 self._get_add_sense_url(self.synset_a), {"word_text": "isonto"}
             )
@@ -1907,7 +2037,7 @@ class EditorViewTest(TestCase):
         # E.g. someone else created the word after this user's search
         self.assertFalse(self.synset_a.sense_set.exists())
         # Queries: as in test_add_sense_htmx_success, which also fetches the word first
-        with self.assertNumQueries(13):
+        with self.assertNumQueries(LOGIN_QUERIES + 13):
             self.client.post(
                 self._get_add_sense_url(self.synset_a),
                 {"word_text": "toets woord"},
@@ -1919,9 +2049,10 @@ class EditorViewTest(TestCase):
         for text in ["   ", "x" * 101]:
             with self.subTest(text=text):
                 # Queries:
+                # LOGIN_QUERIES
                 # fetch synset (with wordnet, pos)
                 # fetch senses (context: none, so no examples query)
-                with self.assertNumQueries(2):
+                with self.assertNumQueries(LOGIN_QUERIES + 2):
                     response = self.client.post(
                         self._get_add_sense_url(self.synset_a),
                         {"word_text": text},
@@ -1936,9 +2067,10 @@ class EditorViewTest(TestCase):
         synset = self._synset_with_pos_not_allowed()
         words_before = Word.objects.count()
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with wordnet, pos)
         # fetch senses (context: none, so no examples query)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self.client.post(
                 self._get_add_sense_url(synset), {"word_text": "sweeftuig"}
             )
@@ -1949,7 +2081,7 @@ class EditorViewTest(TestCase):
     def test_add_sense_htmx_text_of_longest_allowed_length(self):
         text = "x" * 100
         # Queries: as in test_add_sense_htmx_new_word
-        with self.assertNumQueries(17):
+        with self.assertNumQueries(LOGIN_QUERIES + 17):
             self.client.post(
                 self._get_add_sense_url(self.synset_a), {"word_text": text}
             )
@@ -1966,6 +2098,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_c.display_name, "toets woord")
         self.assertEqual(self.synset_c.status, Synset.Status.STUB)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with pos)
         # fetch sense
         # fetch sense examples (pre-delete PROTECT check)
@@ -1976,7 +2109,7 @@ class EditorViewTest(TestCase):
         # UPDATE synset (status → draft)
         # INSERT synset history
         # fetch senses with words (context)
-        with self.assertNumQueries(10):
+        with self.assertNumQueries(LOGIN_QUERIES + 10):
             response = self.client.post(
                 self._get_delete_sense_url(self.synset_c, self.sense_2)
             )
@@ -1990,10 +2123,11 @@ class EditorViewTest(TestCase):
     def test_delete_sense_htmx_wrong_synset(self):
         # sense_1 belongs to synset_b, not synset_a
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset (with pos)
         # fetch sense
         # fetch senses (context — synset_a has no senses so no examples query)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_delete_sense_url(self.synset_a, self.sense_1)
             )
@@ -2008,7 +2142,7 @@ class EditorViewTest(TestCase):
             "editor:delete_sense_htmx",
             kwargs={"synset_pk": 99999, "sense_pk": self.sense_1.pk},
         )
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.post(invalid_url)
         self.assertEqual(response.status_code, 404)
 
@@ -2020,7 +2154,7 @@ class EditorViewTest(TestCase):
             "editor:delete_sense_htmx",
             kwargs={"synset_pk": self.synset_b.pk, "sense_pk": 99999},
         )
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(LOGIN_QUERIES + 2):
             response = self.client.post(invalid_url)
         self.assertEqual(response.status_code, 404)
 
@@ -2053,6 +2187,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self._sense_example_texts(self.sense_2), [])
         self.assertEqual(self.synset_c.status, Synset.Status.STUB)
         # Queries:
+        # LOGIN_QUERIES
         # fetch sense (with word, synset), scoped to synset
         # INSERT example
         # INSERT example history
@@ -2060,7 +2195,7 @@ class EditorViewTest(TestCase):
         # INSERT synset history
         # fetch non-empty examples (context)
         # fetch senses with words (heading)
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self.client.post(
                 self._get_add_sense_example_url(self.synset_c),
                 {"sense_pk": self.sense_2.pk, "text": "Nog 'n toets."},
@@ -2087,10 +2222,11 @@ class EditorViewTest(TestCase):
     def test_add_sense_example_htmx_empty_text(self):
         self.assertEqual(self._sense_example_texts(self.sense_2), [])
         # Queries:
+        # LOGIN_QUERIES
         # fetch sense (with word, synset), scoped to synset
         # fetch non-empty examples (context)
         # fetch senses with words (heading)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_add_sense_example_url(self.synset_c),
                 {"sense_pk": self.sense_2.pk, "text": "   "},
@@ -2108,8 +2244,9 @@ class EditorViewTest(TestCase):
         self.assertNotEqual(self.sense_2.synset_id, self.synset_b.pk)
         self.assertEqual(self._sense_example_texts(self.sense_2), [])
         # Queries:
+        # LOGIN_QUERIES
         # fetch sense scoped to synset (not found → 404)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.post(
                 self._get_add_sense_example_url(self.synset_b),
                 {"sense_pk": self.sense_2.pk, "text": "Nog 'n toets."},
@@ -2123,6 +2260,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_b.status, Synset.Status.COMPLETE)
         self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
         # Queries:
+        # LOGIN_QUERIES
         # fetch example (with sense, word, synset), scoped to synset
         # UPDATE example
         # INSERT example history
@@ -2130,7 +2268,7 @@ class EditorViewTest(TestCase):
         # INSERT synset history
         # fetch non-empty examples (context)
         # fetch senses with words (heading)
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_b, self.sense_example),
                 {"text": "Hierdie is 'n beter toets."},
@@ -2151,10 +2289,11 @@ class EditorViewTest(TestCase):
         # Trailing whitespace is stripped by the form, so this counts as unchanged.
         self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
         # Queries:
+        # LOGIN_QUERIES
         # fetch example (with sense, word, synset), scoped to synset
         # fetch non-empty examples (context)
         # fetch senses with words (heading)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_b, self.sense_example),
                 {"text": "Hierdie is 'n toets.  "},
@@ -2170,10 +2309,11 @@ class EditorViewTest(TestCase):
     def test_edit_sense_example_htmx_empty_text(self):
         self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
         # Queries:
+        # LOGIN_QUERIES
         # fetch example (with sense, word, synset), scoped to synset
         # fetch non-empty examples (context)
         # fetch senses with words (heading)
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_b, self.sense_example),
                 {"text": ""},
@@ -2192,8 +2332,9 @@ class EditorViewTest(TestCase):
         self.assertNotEqual(self.sense_example.sense.synset_id, self.synset_c.pk)
         self.assertEqual(self.sense_example.text, "Hierdie is 'n toets.")
         # Queries:
+        # LOGIN_QUERIES
         # fetch example scoped to synset (not found → 404)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.post(
                 self._get_edit_sense_example_url(self.synset_c, self.sense_example),
                 {"text": "Gekaap."},
@@ -2208,6 +2349,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_b.status, Synset.Status.COMPLETE)
         self.assertTrue(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
         # Queries:
+        # LOGIN_QUERIES
         # fetch example (with sense, word, synset), scoped to synset
         # DELETE example
         # INSERT example history
@@ -2215,7 +2357,7 @@ class EditorViewTest(TestCase):
         # INSERT synset history
         # fetch non-empty examples (context)
         # fetch senses with words (heading)
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(LOGIN_QUERIES + 7):
             response = self.client.post(
                 self._get_delete_sense_example_url(self.synset_b, self.sense_example)
             )
@@ -2230,8 +2372,9 @@ class EditorViewTest(TestCase):
         self.assertNotEqual(self.sense_example.sense.synset_id, self.synset_c.pk)
         self.assertTrue(SenseExample.objects.filter(pk=self.sense_example.pk).exists())
         # Queries:
+        # LOGIN_QUERIES
         # fetch example scoped to synset (not found → 404)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
             response = self.client.post(
                 self._get_delete_sense_example_url(self.synset_c, self.sense_example)
             )
@@ -2256,12 +2399,13 @@ class EditorViewTest(TestCase):
         # The assertions below rely on synset_e having no words of its own
         self.assertFalse(self.synset_e.sense_set.exists())
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # relations of synset_d (source synset)
         # senses (with words) of synset_d
         # non-empty sense examples of synset_d
         # synset examples of synset_d
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 4):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 4):
             response = self.client.get(self._get_synset_detail_url(self.synset_e))
         self.assertContains(response, "n Bronvoorbeeld.")
         (shown_sense,) = response.context["source_synset_senses"]
@@ -2286,10 +2430,11 @@ class EditorViewTest(TestCase):
             self._sense_example_texts(self.sense_1), [self.sense_example.text, ""]
         )
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 2):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 2):
             response = self.client.get(self._get_synset_detail_url(self.synset_b))
         sense = response.context["senses"][0]
         self.assertEqual(
@@ -2306,10 +2451,11 @@ class EditorViewTest(TestCase):
             ["Hierdie is 'n toets.", "Wortel.", "Appel."],
         )
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 2):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 2):
             response = self.client.get(self._get_synset_detail_url(self.synset_b))
         sense = response.context["senses"][0]
         self.assertEqual(
@@ -2325,10 +2471,11 @@ class EditorViewTest(TestCase):
         )
         max_length = SenseExample._meta.get_field("text").max_length
         # Queries (building the forms adds none):
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 2):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 2):
             response = self.client.get(self._get_synset_detail_url(self.synset_b))
         self.assertContains(response, f'maxlength="{max_length}"', count=2)
         # A page load highlights nothing; only a save does
@@ -2343,10 +2490,11 @@ class EditorViewTest(TestCase):
             self._sense_example_texts(self.sense_1), ["Hierdie is 'n toets."]
         )
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 2):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 2):
             response = self.client.get(self._get_synset_detail_url(self.synset_b))
         self.assertContains(
             response, "Its <strong>usage example</strong> will also be deleted."
@@ -2356,10 +2504,11 @@ class EditorViewTest(TestCase):
         SenseExample.objects.create(text="'n Tweede toets.", sense=self.sense_1)
         self.assertEqual(len(self._sense_example_texts(self.sense_1)), 2)
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 2):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 2):
             response = self.client.get(self._get_synset_detail_url(self.synset_b))
         self.assertContains(
             response, "Its <strong>2 usage examples</strong> will also be deleted."
@@ -2371,10 +2520,11 @@ class EditorViewTest(TestCase):
         # The example still exists; only its text is empty
         self.assertEqual(self._sense_example_texts(self.sense_1), [""])
         # Queries:
+        # LOGIN_QUERIES
         # SYNSET_DETAIL_QUERIES
         # guess source synset by Princeton ID
         # non-empty sense examples
-        with self.assertNumQueries(SYNSET_DETAIL_QUERIES + 2):
+        with self.assertNumQueries(LOGIN_QUERIES + SYNSET_DETAIL_QUERIES + 2):
             response = self.client.get(self._get_synset_detail_url(self.synset_b))
         self.assertContains(response, "Remove this word from the synset?")
         self.assertNotContains(response, "will also be deleted")
@@ -2386,12 +2536,13 @@ class EditorViewTest(TestCase):
         # The status must stay draft, so it has to start as draft
         self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
         # Queries:
+        # LOGIN_QUERIES
         # fetch synset
         # fetch senses
         # fetch non-empty examples
         # fetch words
         # check for relations
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(LOGIN_QUERIES + 5):
             response = self.client.post(
                 self._get_synset_status_htmx_url(self.synset_b),
                 {"new_status": Synset.Status.COMPLETE},

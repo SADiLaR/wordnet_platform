@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Prefetch, Q, prefetch_related_objects
 from django.db.models.functions import Length
@@ -33,10 +34,12 @@ from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
 
 
+@login_not_required
 def about(request):
     return render(request, "editor/about.html")
 
 
+@login_not_required
 def front_page(request):
     return render(request, "editor/front_page.html")
 

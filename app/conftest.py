@@ -1,4 +1,5 @@
 import pytest
+from django.conf import settings
 
 # Playwright tests need these overrides to run in Django. To avoid affecting
 # other tests, the Playwright tests run separately with pytest, in
@@ -39,3 +40,23 @@ def allow_async_unsafe():
 @pytest.fixture(scope="session")
 def base_url(live_server):
     return live_server.url
+
+
+# Editor pages need login. Logging in through the login form in every test would be
+# slow, so the test client logs in and the browser gets its session cookie. Use with
+# @pytest.mark.usefixtures("logged_in").
+@pytest.fixture
+def logged_in(page, client, django_user_model, live_server):
+    user = django_user_model.objects.create_user(username="tester")
+    client.force_login(user)
+    session_cookie = client.cookies[settings.SESSION_COOKIE_NAME]
+    page.context.add_cookies(
+        [
+            {
+                "name": session_cookie.key,
+                "value": session_cookie.value,
+                "url": live_server.url,
+            }
+        ]
+    )
+    return user

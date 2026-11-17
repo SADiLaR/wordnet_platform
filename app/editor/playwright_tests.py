@@ -20,6 +20,7 @@ def test_front_page_title(page: Page):
     expect(page).to_have_title("AfWN Editor")
 
 
+@pytest.mark.usefixtures("logged_in")
 def test_status_warning(page: Page):
     language = Language.objects.create(iso_code="afr", name="Afrikaans")
     wordnet = Wordnet.objects.create(name="Toets Woordnet", language=language)
@@ -35,6 +36,7 @@ def test_status_warning(page: Page):
     expect(page.get_by_text("This synset may not be complete:")).to_be_visible()
 
 
+@pytest.mark.usefixtures("logged_in")
 def test_add_usage_example_focuses_textarea(page: Page):
     # The add form starts with a hidden input, which can't take focus
     language = Language.objects.create(iso_code="afr", name="Afrikaans")
@@ -52,6 +54,7 @@ def test_add_usage_example_focuses_textarea(page: Page):
     expect(page.get_by_role("textbox", name="Example for “toets”")).to_be_focused()
 
 
+@pytest.mark.usefixtures("logged_in")
 @pytest.mark.parametrize(
     "viewport, visible",
     [("mobile", True), ("small_screen", False), ("desktop", False)],

@@ -83,6 +83,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "simple_history.middleware.HistoryRequestMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    # Last, as it needs request.htmx (HtmxMiddleware) and request.user
+    "editor.middleware.HtmxLoginRequiredMiddleware",
 ]
 if DEBUG and DEBUG_TOOLBAR:
     MIDDLEWARE.insert(2, "debug_toolbar.middleware.DebugToolbarMiddleware")
@@ -186,6 +188,7 @@ ADMINS = [
     tuple(admin.strip().rsplit(maxsplit=1)) for admin in env.list("ADMINS", default=[])
 ]
 
+LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 

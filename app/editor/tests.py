@@ -10,6 +10,7 @@ from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 from django.test.html import parse_html
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escape
 
 from editor.filters import SynsetFilter
@@ -2557,6 +2558,8 @@ class EditorViewTest(TestCase):
 class AssignmentModelTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="testuser")
+        self.other_user = User.objects.create_user(username="otheruser")
+        self.assigner = User.objects.create_user(username="assigner")
         language = Language.objects.create(iso_code="eng", name="English")
         pos = PartOfSpeech.objects.create(name="noun")
         self.wordnet = Wordnet.objects.create(name="Test Wordnet", language=language)
@@ -2572,27 +2575,205 @@ class AssignmentModelTest(TestCase):
 
     def test_clean_on_assignment(self):
         no_target_synset = Assignment(
-            user=self.user, source_synset=self.synset_a, target_wordnet=self.wordnet
+            user=self.user,
+            assigner=self.assigner,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet,
         )
-        no_target_synset.full_clean()
+        no_target_synset.full_clean()  # Valid: doesn't raise.
 
         no_target_wordnet = Assignment(
-            user=self.user, source_synset=self.synset_a, target_synset=self.synset_b
+            user=self.user,
+            assigner=self.assigner,
+            source_synset=self.synset_a,
+            target_synset=self.synset_b,
         )
         no_target_wordnet.full_clean()
         self.assertEqual(no_target_wordnet.target_wordnet, self.wordnet)
 
-        no_target_synset_or_wordnet = Assignment(
-            user=self.user, source_synset=self.synset_a
+        no_synset = Assignment(
+            user=self.user, assigner=self.assigner, target_wordnet=self.wordnet
         )
-        with self.assertRaises(ValidationError):
+        with self.assertRaisesMessage(
+            ValidationError,
+            "Choose a source synset to copy, or an existing target synset.",
+        ):
+            no_synset.full_clean()
+
+        no_target_synset_or_wordnet = Assignment(
+            user=self.user, assigner=self.assigner, source_synset=self.synset_a
+        )
+        with self.assertRaisesMessage(
+            ValidationError, "Specify either a target wordnet or target synset."
+        ):
             no_target_synset_or_wordnet.full_clean()
 
         incompatible_wordnet_and_synset = Assignment(
             user=self.user,
+            assigner=self.assigner,
             source_synset=self.synset_a,
             target_synset=self.synset_b,
             target_wordnet=self.wordnet_2,
         )
-        with self.assertRaises(ValidationError):
+        with self.assertRaisesMessage(
+            ValidationError, "Target synset must belong to target wordnet."
+        ):
             incompatible_wordnet_and_synset.full_clean()
+
+    def test_one_assignment_per_user_per_synset(self):
+        Assignment.objects.create(
+            user=self.user,
+            assigner=self.assigner,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet_2,
+        )
+        Assignment.objects.create(
+            user=self.user,
+            assigner=self.assigner,
+            target_synset=self.synset_b,
+            target_wordnet=self.wordnet,
+        )
+
+        # A review of work the same person was asked to complete.
+        same_source = Assignment(
+            user=self.user,
+            assigner=self.assigner,
+            goal=Assignment.Goal.TO_REVIEW,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet_2,
+        )
+        with self.assertRaisesMessage(
+            ValidationError,
+            "This person already has an assignment to copy this synset "
+            "into this wordnet.",
+        ):
+            same_source.full_clean()
+
+        same_target = Assignment(
+            user=self.user,
+            assigner=self.assigner,
+            goal=Assignment.Goal.TO_REVIEW,
+            target_synset=self.synset_b,
+        )
+        with self.assertRaisesMessage(
+            ValidationError, "This person already has an assignment on this synset."
+        ):
+            same_target.full_clean()
+
+        # The same source, copied into another wordnet, is other work.
+        Assignment(
+            user=self.user,
+            assigner=self.assigner,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet,
+        ).full_clean()  # Valid: doesn't raise.
+
+    def test_several_people_can_have_the_same_work(self):
+        # Only starting work locks a synset, so having it in a queue is no claim.
+        Assignment.objects.create(
+            user=self.user,
+            assigner=self.user,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet_2,
+        )
+        Assignment.objects.create(
+            user=self.user,
+            assigner=self.user,
+            target_synset=self.synset_b,
+            target_wordnet=self.wordnet,
+        )
+
+        Assignment(
+            user=self.other_user,
+            assigner=self.other_user,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet_2,
+        ).full_clean()  # Valid: doesn't raise.
+        Assignment(
+            user=self.other_user,
+            assigner=self.other_user,
+            target_synset=self.synset_b,
+        ).full_clean()  # Valid: doesn't raise.
+
+
+class AssignmentAdminTest(TestCase):
+    def setUp(self):
+        self.marissa = User.objects.create_superuser(username="marissa")
+        self.linguist = User.objects.create_user(username="linguist")
+        language = Language.objects.create(iso_code="zul", name="isiZulu")
+        pos = PartOfSpeech.objects.create(name="noun")
+        self.wordnet = Wordnet.objects.create(name="isiZulu", language=language)
+        self.synset = Synset.objects.create(
+            definition="A test synset", wordnet=self.wordnet, pos=pos
+        )
+        self.client.force_login(self.marissa)
+
+    def _form_data(self, **kwargs):
+        """Return the admin form's POST data for an assignment on self.synset."""
+        return {
+            "user": self.linguist.pk,
+            "goal": Assignment.Goal.TO_COMPLETE,
+            "source_synset": "",
+            "target_synset": self.synset.pk,
+            "target_wordnet": "",
+            "done_at_0": "",
+            "done_at_1": "",
+            **kwargs,
+        }
+
+    def test_add_records_who_added_it(self):
+        self.assertFalse(Assignment.objects.exists())
+
+        # No assertNumQueries: this is Django's admin view, not one of ours.
+        response = self.client.post(
+            reverse("admin:editor_assignment_add"),
+            # A hand-made request can't name someone else as the assigner.
+            self._form_data(assigner=self.linguist.pk),
+        )
+
+        self.assertRedirects(response, reverse("admin:editor_assignment_changelist"))
+        assignment = Assignment.objects.get()
+        self.assertEqual(assignment.assigner, self.marissa)
+
+    def test_change_keeps_the_assigner(self):
+        assignment = Assignment.objects.create(
+            user=self.linguist,
+            assigner=self.marissa,
+            target_synset=self.synset,
+            target_wordnet=self.wordnet,
+        )
+        other_admin = User.objects.create_superuser(username="otheradmin")
+        self.client.force_login(other_admin)
+
+        # No assertNumQueries: this is Django's admin view, not one of ours.
+        response = self.client.post(
+            reverse("admin:editor_assignment_change", args=[assignment.pk]),
+            self._form_data(goal=Assignment.Goal.TO_REVIEW),
+        )
+
+        self.assertRedirects(response, reverse("admin:editor_assignment_changelist"))
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.goal, Assignment.Goal.TO_REVIEW)
+        self.assertEqual(assignment.assigner, self.marissa)
+
+    def test_done_filter(self):
+        done = Assignment.objects.create(
+            user=self.linguist,
+            assigner=self.marissa,
+            target_synset=self.synset,
+            target_wordnet=self.wordnet,
+            done_at=timezone.now(),
+        )
+        not_done = Assignment.objects.create(
+            user=self.marissa,
+            assigner=self.marissa,
+            target_synset=self.synset,
+            target_wordnet=self.wordnet,
+        )
+        url = reverse("admin:editor_assignment_changelist")
+
+        # No assertNumQueries: this is Django's admin view, not one of ours.
+        for value, expected in [("yes", [done]), ("no", [not_done])]:
+            with self.subTest(done=value):
+                response = self.client.get(url, {"done": value})
+                self.assertQuerySetEqual(response.context["cl"].queryset, expected)

@@ -37,6 +37,27 @@ def test_status_warning(page: Page):
 
 
 @pytest.mark.usefixtures("logged_in")
+def test_failed_request_shows_a_message(page: Page):
+    language = Language.objects.create(iso_code="afr", name="Afrikaans")
+    wordnet = Wordnet.objects.create(name="Toets Woordnet", language=language)
+    pos = PartOfSpeech.objects.create(name="noun")
+    synset = Synset.objects.create(
+        definition="'n Toets synset", wordnet=wordnet, pos=pos
+    )
+    page.goto(reverse("editor:synset_detail", kwargs={"pk": synset.pk}))
+    message = page.get_by_role("alert").filter(has_text="That didn’t work.")
+    expect(message).to_be_hidden()
+
+    # Deleted since the page was loaded, e.g. in another tab: the status change is
+    # refused with a 404, which HTMX doesn't show by itself.
+    synset.delete()
+    status = page.get_by_role("group", name="Synset status")
+    status.get_by_text("Complete", exact=True).click()
+
+    expect(message).to_be_visible()
+
+
+@pytest.mark.usefixtures("logged_in")
 def test_add_usage_example_focuses_textarea(page: Page):
     # The add form starts with a hidden input, which can't take focus
     language = Language.objects.create(iso_code="afr", name="Afrikaans")

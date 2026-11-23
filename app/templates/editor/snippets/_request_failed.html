@@ -1,0 +1,30 @@
+{% load i18n %}
+{% comment %}
+  The message for an HTMX request that the server refused or failed, sent by the error
+  handlers in wordnet_platform/views.py. HTMX puts it in the `.request-failed` box in
+  base.html (see `htmx-config` there). It arrives already shown (`show`), so it needs no
+  script; the close button uses Bootstrap's own. A link to "" reloads the current page.
+{% endcomment %}
+<div
+    class="toast show request-failed-toast text-bg-danger border-0"
+    role="alert"
+    aria-atomic="true"
+>
+  <div class="d-flex">
+    <div class="toast-body">
+      {{ message }}
+      <div class="mt-2">
+        <a
+            href=""
+            class="btn btn-sm btn-light"
+        >{% trans "Reload page" %}</a>
+      </div>
+    </div>
+    <button
+        type="button"
+        class="btn-close btn-close-white me-2 m-auto"
+        data-bs-dismiss="toast"
+        aria-label="{% trans 'Close' %}"
+    ></button>
+  </div>
+</div>

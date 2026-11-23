@@ -1,3 +1,5 @@
+import json
+import re
 from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth.models import User
@@ -7,7 +9,7 @@ from django.contrib.messages.storage.base import Message
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.template.loader import render_to_string
-from django.test import SimpleTestCase, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.test.html import parse_html
 from django.urls import reverse
 from django.utils import timezone
@@ -34,6 +36,7 @@ from lex.models import (
     Word,
     Wordnet,
 )
+from wordnet_platform.views import server_error
 
 # Shared query counts for assertNumQueries. Update them here when a view's
 # queries change
@@ -124,6 +127,67 @@ class MessagesTest(SimpleTestCase):
         self.assertInHTML(
             '<div class="alert alert-warning" role="alert">Pas op</div>', html
         )
+
+
+class RequestFailedTest(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_user(username="tester"))
+        # A synset that doesn't exist, as after someone else deleted it
+        self.url = reverse(
+            "editor:delete_sense_htmx", kwargs={"synset_pk": 0, "sense_pk": 0}
+        )
+
+    def test_htmx_request_gets_the_message(self):
+        # Queries:
+        # LOGIN_QUERIES
+        # fetch synset (not found → 404)
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
+            response = self.client.post(self.url, headers={"HX-Request": "true"})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTemplateUsed(response, "editor/snippets/_request_failed.html")
+        self.assertContains(
+            response, "Something on this page may have changed", status_code=404
+        )
+
+    def test_other_request_gets_the_error_page(self):
+        # Queries:
+        # LOGIN_QUERIES
+        # fetch synset (not found → 404)
+        with self.assertNumQueries(LOGIN_QUERIES + 1):
+            response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTemplateNotUsed(response, "editor/snippets/_request_failed.html")
+
+    def test_server_error(self):
+        request = RequestFactory().post("/")
+        request.htmx = True
+
+        response = server_error(request)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertContains(response, "Something went wrong", status_code=500)
+
+    def test_htmx_config_finds_the_message(self):
+        # HTMX ignores a config it can't parse, so a typo would quietly bring back
+        # silent failures.
+        page = render_to_string("editor/base.html")
+        config = json.loads(
+            re.search(r"name=\"htmx-config\"\s+content='([^']*)'", page)[1]
+        )
+        errors = next(
+            rule for rule in config["responseHandling"] if rule["code"] == "[45].."
+        )
+
+        self.assertTrue(errors["swap"])
+        # The box is on every page, and the message is what the error handlers send
+        self.assertIn('class="toast-container', page)
+        self.assertIn(errors["target"].lstrip("."), page)
+        message = render_to_string(
+            "editor/snippets/_request_failed.html", {"message": "Toets"}
+        )
+        self.assertIn(errors["select"].lstrip("."), message)
 
 
 class FooterTest(TestCase):

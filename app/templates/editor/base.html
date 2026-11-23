@@ -16,6 +16,24 @@
     defer
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/js/bootstrap.min.js" integrity="sha384-89aa4glufciPv46aKltztWQEmk+Tu9W2RhzXr6VcnUUEub7F8+06RcL2RYLCOHUq" crossorigin="anonymous">
   </script>
+  {% comment %}
+    HTMX's default response handling, except that error responses (4xx, 5xx) are
+    swapped in too: their `.request-failed-toast`, which the error handlers send for
+    HTMX requests, goes into the `.request-failed` box at the end of the page. HTMX
+    would otherwise show nothing, so a failed click would seem to do nothing.
+    With DEBUG on, {% htmx_script %} also loads django-htmx's debug script, which shows
+    Django's error page instead for a 400, 403, 404 or 500.
+  {% endcomment %}
+  <meta
+      name="htmx-config"
+      content='{"responseHandling": [
+        {"code": "204", "swap": false},
+        {"code": "[23]..", "swap": true},
+        {"code": "[45]..", "swap": true, "error": true, "target": ".request-failed",
+         "swapOverride": "innerHTML", "select": ".request-failed-toast"},
+        {"code": "...", "swap": false}
+      ]}'
+  >
   {% htmx_script %}
 </head>
 <body class="d-flex flex-column min-vh-100" hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
@@ -72,6 +90,14 @@
     {% endif %}
   </div>
 </footer>
+
+{% comment %}
+  Where the message about a failed HTMX request appears (`_request_failed.html`). Fixed
+  at the top of the screen, so it's in view whatever the scroll position.
+{% endcomment %}
+<div
+    class="toast-container position-fixed top-0 start-50 translate-middle-x p-3 request-failed"
+></div>
 
 <script>
   function updateStatusButtons() {

@@ -48,3 +48,8 @@ urlpatterns = [
 ]
 if settings.DEBUG and settings.DEBUG_TOOLBAR:
     urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))
+
+handler400 = "wordnet_platform.views.bad_request"
+handler403 = "wordnet_platform.views.permission_denied"
+handler404 = "wordnet_platform.views.page_not_found"
+handler500 = "wordnet_platform.views.server_error"

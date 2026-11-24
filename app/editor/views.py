@@ -33,6 +33,9 @@ from lex.models import (
 from .filters import SynsetFilter, make_search_qs
 from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
 
+# Number of results shown in the word and synset search dropdowns
+SEARCH_RESULTS_LIMIT = 6
+
 
 @login_not_required
 def about(request):
@@ -525,10 +528,11 @@ def search_words_htmx(request, pk):
     same_language_and_pos = Word.objects.filter(
         language=synset.wordnet.language_id, pos=synset.pos_id
     )
-    words = (
+    # One more than we show, to know whether there are more matches
+    words = list(
         same_language_and_pos.filter(text__unaccent__icontains=q)
         .exclude(sense__synset=synset)
-        .order_by(Length("text"), "text")
+        .order_by(Length("text"), "text")[: SEARCH_RESULTS_LIMIT + 1]
     )
     # A separate query, as `words` leaves out this synset's words and gets cut off.
     # Case and accents count: isiZulu's iSonto and isonto can be different words, and
@@ -553,7 +557,8 @@ def search_words_htmx(request, pk):
     context = {
         "q": q,
         "synset": synset,
-        "words": words[:6],
+        "words": words[:SEARCH_RESULTS_LIMIT],
+        "has_more": len(words) > SEARCH_RESULTS_LIMIT,
         "already_linked": exact_match is not None and exact_match.in_synset,
         "can_create": exact_match is None and error is None,
         "error": error,
@@ -747,10 +752,12 @@ def search_synsets_htmx(request, pk):
     synsets = Synset.objects.filter(wordnet_id=wordnet.id).only(
         "display_name", "definition"
     )
-    synsets = make_search_qs(synsets, q)
+    # One more than we show, to know whether there are more matches
+    synsets = list(make_search_qs(synsets, q)[: SEARCH_RESULTS_LIMIT + 1])
     context = {
         "q": q.strip(),
-        "synsets": synsets[:6],
+        "synsets": synsets[:SEARCH_RESULTS_LIMIT],
+        "has_more": len(synsets) > SEARCH_RESULTS_LIMIT,
     }
     return render(
         request,

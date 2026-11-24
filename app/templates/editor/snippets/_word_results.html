@@ -15,6 +15,13 @@
     >{{ word.text | highlight:q }}</button>
     </li>
     {% endfor %}
+    {% if has_more %}
+    <li>
+      <span class="dropdown-item-text small text-secondary">
+        {% trans "More words match. Type more to narrow the search." %}
+      </span>
+    </li>
+    {% endif %}
     {% if can_create %}
     <li class="border-top">
       <button

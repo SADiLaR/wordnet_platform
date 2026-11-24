@@ -8,9 +8,23 @@ from django_filters import ModelMultipleChoiceFilter, MultipleChoiceFilter
 from lex.models import PartOfSpeech, Sense, Synset, Wordnet
 
 MIN_DEFINITION_SEARCH_LENGTH = 4
+# Shorter search terms only match whole words
+MIN_CONTAINS_SEARCH_LENGTH = 3
 
 
-def make_search_qs(queryset, search):
+def make_search_qs(queryset, search, short_whole_words=False):
+    if short_whole_words and len(search) < MIN_CONTAINS_SEARCH_LENGTH:
+        # For short searches, match whole words instead of searching and ranking
+        # partial matches across the entire wordnet.
+        search_filter = Q(
+            pk__in=Sense.objects.filter(
+                word__text__unaccent__iexact=search
+            ).values("synset_id")
+        )
+        if search.isdigit():
+            search_filter |= Q(pk=int(search))
+        return queryset.filter(search_filter).order_by("display_name", "pk")
+
     search_filter = Q(display_name__unaccent__icontains=search)
     if search.isdigit():
         search_filter |= Q(pk=int(search))
@@ -80,7 +94,7 @@ class SynsetFilter(django_filters.FilterSet):
         search = self.form.cleaned_data.get("search", "").strip()
 
         if search:
-            return make_search_qs(queryset, search)
+            return make_search_qs(queryset, search, short_whole_words=True)
         return queryset
 
     def ignore(self, queryset, name, value):

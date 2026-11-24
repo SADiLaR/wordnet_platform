@@ -30,7 +30,7 @@ from lex.models import (
     Wordnet,
 )
 
-from .filters import SynsetFilter, make_search_qs
+from .filters import MIN_CONTAINS_SEARCH_LENGTH, SynsetFilter, make_search_qs
 from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
 
 # Number of results shown in the word and synset search dropdowns
@@ -242,6 +242,9 @@ def browse_synsets(request):
     context["page_obj"] = page_obj
     context["filter"] = f
     context["q"] = f.form.cleaned_data.get("search", "").strip()
+    # Short searches only match whole words (see make_search_qs)
+    context["whole_words_only"] = len(context["q"]) < MIN_CONTAINS_SEARCH_LENGTH
+    context["min_contains_length"] = MIN_CONTAINS_SEARCH_LENGTH
     context["url_params"] = url_params.urlencode()
     context["new_synset_url"] = _new_synset_url(request)
 
@@ -745,7 +748,7 @@ def add_relation_form_htmx(request, pk):
 
 
 def search_synsets_htmx(request, pk):
-    if not (q := request.GET.get("q")):
+    if not (q := request.GET.get("q", "").strip()):
         return HttpResponse("", content_type="text/html")
 
     wordnet = get_object_or_404(Wordnet, pk=pk)
@@ -755,7 +758,7 @@ def search_synsets_htmx(request, pk):
     # One more than we show, to know whether there are more matches
     synsets = list(make_search_qs(synsets, q)[: SEARCH_RESULTS_LIMIT + 1])
     context = {
-        "q": q.strip(),
+        "q": q,
         "synsets": synsets[:SEARCH_RESULTS_LIMIT],
         "has_more": len(synsets) > SEARCH_RESULTS_LIMIT,
     }

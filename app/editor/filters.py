@@ -17,9 +17,9 @@ def make_search_qs(queryset, search, short_whole_words=False):
         # For short searches, match whole words instead of searching and ranking
         # partial matches across the entire wordnet.
         search_filter = Q(
-            pk__in=Sense.objects.filter(
-                word__text__unaccent__iexact=search
-            ).values("synset_id")
+            pk__in=Sense.objects.filter(word__text__unaccent__iexact=search).values(
+                "synset_id"
+            )
         )
         if search.isdigit():
             search_filter |= Q(pk=int(search))

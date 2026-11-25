@@ -26,6 +26,13 @@
             </button>
         </li>
         {% endfor %}
+        {% if has_more %}
+        <li>
+            <span class="dropdown-item-text small text-secondary">
+                {% trans "More synsets match. Type more to narrow the search." %}
+            </span>
+        </li>
+        {% endif %}
     </ul>
 {% else %}
     <p class="text-secondary small mt-2 mb-0">{% trans "No synsets found." %}</p>

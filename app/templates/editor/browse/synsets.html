@@ -33,6 +33,14 @@
             {% trans "Reset" %}</a>
         </div>
     </section>
+  {% if whole_words_only %}
+    <p class="text-secondary small">
+      {% blocktrans trimmed with word=q length=min_contains_length %}
+        Showing exact word matches for “{{ word }}”. Enter at least {{ length }}
+        characters to include partial matches.
+      {% endblocktrans %}
+    </p>
+  {% endif %}
   {% if page_obj %}
     <table class="table table-hover">
       <thead>

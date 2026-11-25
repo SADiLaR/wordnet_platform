@@ -30,8 +30,11 @@ from lex.models import (
     Wordnet,
 )
 
-from .filters import SynsetFilter, make_search_qs
+from .filters import MIN_CONTAINS_SEARCH_LENGTH, SynsetFilter, make_search_qs
 from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
+
+# Number of results shown in the word and synset search dropdowns
+SEARCH_RESULTS_LIMIT = 6
 
 
 @login_not_required
@@ -239,6 +242,9 @@ def browse_synsets(request):
     context["page_obj"] = page_obj
     context["filter"] = f
     context["q"] = f.form.cleaned_data.get("search", "").strip()
+    # Short searches only match whole words (see make_search_qs)
+    context["whole_words_only"] = len(context["q"]) < MIN_CONTAINS_SEARCH_LENGTH
+    context["min_contains_length"] = MIN_CONTAINS_SEARCH_LENGTH
     context["url_params"] = url_params.urlencode()
     context["new_synset_url"] = _new_synset_url(request)
 
@@ -525,10 +531,11 @@ def search_words_htmx(request, pk):
     same_language_and_pos = Word.objects.filter(
         language=synset.wordnet.language_id, pos=synset.pos_id
     )
-    words = (
+    # One more than we show, to know whether there are more matches
+    words = list(
         same_language_and_pos.filter(text__unaccent__icontains=q)
         .exclude(sense__synset=synset)
-        .order_by(Length("text"), "text")
+        .order_by(Length("text"), "text")[: SEARCH_RESULTS_LIMIT + 1]
     )
     # A separate query, as `words` leaves out this synset's words and gets cut off.
     # Case and accents count: isiZulu's iSonto and isonto can be different words, and
@@ -553,7 +560,8 @@ def search_words_htmx(request, pk):
     context = {
         "q": q,
         "synset": synset,
-        "words": words[:6],
+        "words": words[:SEARCH_RESULTS_LIMIT],
+        "has_more": len(words) > SEARCH_RESULTS_LIMIT,
         "already_linked": exact_match is not None and exact_match.in_synset,
         "can_create": exact_match is None and error is None,
         "error": error,
@@ -740,17 +748,19 @@ def add_relation_form_htmx(request, pk):
 
 
 def search_synsets_htmx(request, pk):
-    if not (q := request.GET.get("q")):
+    if not (q := request.GET.get("q", "").strip()):
         return HttpResponse("", content_type="text/html")
 
     wordnet = get_object_or_404(Wordnet, pk=pk)
     synsets = Synset.objects.filter(wordnet_id=wordnet.id).only(
         "display_name", "definition"
     )
-    synsets = make_search_qs(synsets, q)
+    # One more than we show, to know whether there are more matches
+    synsets = list(make_search_qs(synsets, q)[: SEARCH_RESULTS_LIMIT + 1])
     context = {
-        "q": q.strip(),
-        "synsets": synsets[:6],
+        "q": q,
+        "synsets": synsets[:SEARCH_RESULTS_LIMIT],
+        "has_more": len(synsets) > SEARCH_RESULTS_LIMIT,
     }
     return render(
         request,

@@ -394,6 +394,13 @@ class EditorViewTest(TestCase):
         self.assertContains(
             response, f'href="{self._get_synset_detail_url(self.synset_d)}"', count=2
         )
+        # Browse has two Reset buttons: one beside the search box, and one under the
+        # filters, from the shared layout. Both link to this page without the filters.
+        self.assertInHTML(
+            f'<a href="{self._get_browse_url()}" class="btn btn-secondary">Reset</a>',
+            response.content.decode(),
+            count=2,
+        )
 
     def test_synsets_wordnet_filter(self):
         data = {"wordnet": [self.wordnet.id]}

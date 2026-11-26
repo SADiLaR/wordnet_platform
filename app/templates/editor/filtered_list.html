@@ -1,0 +1,55 @@
+{% extends "editor/base.html" %}
+{% load i18n %}
+{% comment %}
+A page with a list on the left and filters on the right, e.g. Browse and the queue. The
+filters are fields of one GET form, which the list's own controls (e.g. a search box)
+can be part of too.
+
+Blocks:
+- header: the page's heading, and anything else above the form
+- results: the list, and whatever goes with it
+- filters: the filter groups, as `_search_filter.html` includes
+{% endcomment %}
+
+{% block content %}
+{% block header %}{% endblock %}
+{% spaceless %}
+<form
+    method="get"
+    class="row"
+>
+  <div class="mt-2">
+    <a
+        href="#filters"
+        class="d-md-none"
+    >{% trans "Filter results below" %}</a>
+  </div>
+  <div class="col-md-8">
+    {% block results %}{% endblock %}
+  </div>
+  <div class="col-md-4 ps-md-4">
+    <section
+        id="filters"
+        aria-labelledby="filter-heading"
+    >
+      <h2
+          id="filter-heading"
+          class="fs-5"
+      >{% trans "Filters" %}</h2>
+      <div class="row mb-2">
+        {% block filters %}{% endblock %}
+      </div>
+      <input
+          type="submit"
+          class="btn btn-primary me-4"
+      >
+      {# The same page, without the filters #}
+      <a
+          href="{{ request.path }}"
+          class="btn btn-secondary"
+      >{% trans "Reset" %}</a>
+    </section>
+  </div>
+</form>
+{% endspaceless %}
+{% endblock %}

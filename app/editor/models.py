@@ -77,6 +77,21 @@ class Assignment(models.Model):
     def __str__(self):
         return f"Assignment\xa0{self.pk}"
 
+    def goal_reached(self):
+        """Whether the synset's status has reached the goal, so the work can be done.
+
+        A reviewed synset is complete too. A copy that hasn't been created yet
+        has reached no goal.
+        """
+        if self.target_synset is None:
+            return False
+        if self.goal == self.Goal.TO_REVIEW:
+            return self.target_synset.status == Synset.Status.REVIEWED
+        return self.target_synset.status in (
+            Synset.Status.COMPLETE,
+            Synset.Status.REVIEWED,
+        )
+
     def clean(self):
         super().clean()
 

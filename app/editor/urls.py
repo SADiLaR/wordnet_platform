@@ -8,9 +8,6 @@ urlpatterns = [
     path("", views.front_page, name="front_page"),
     path("about/", views.about, name="about"),
     path("queue/", views.assignment_queue, name="assignment_queue"),
-    path(
-        "queue/<int:wn_pk>/", views.assignment_queue, name="assignment_queue_by_wordnet"
-    ),
     path("synsets/", views.browse_synsets, name="browse_synsets"),
     path(
         "synsets/new/",

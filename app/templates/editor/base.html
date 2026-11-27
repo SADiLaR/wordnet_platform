@@ -16,7 +16,16 @@
     defer
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/js/bootstrap.min.js" integrity="sha384-89aa4glufciPv46aKltztWQEmk+Tu9W2RhzXr6VcnUUEub7F8+06RcL2RYLCOHUq" crossorigin="anonymous">
   </script>
+  <meta name="htmx-config" content='{"responseHandling": [
+    {"code": "204", "swap": false},
+    {"code": "[23]..", "swap": true},
+    {"code": "[45]..", "swap": true, "error": true,
+     "target": "#request-error", "swapOverride": "innerHTML",
+     "select": "#request-error-content", "ignoreTitle": true},
+    {"code": "...", "swap": false}
+  ]}'>
   {% htmx_script %}
+  <script defer src="{% static 'js/request-feedback.js' %}"></script>
 </head>
 <body class="d-flex flex-column min-vh-100" hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
 
@@ -37,6 +46,9 @@
 </nav>
 
 <main class="container-fluid p-4">
+  <div id="request-error" class="alert alert-danger" role="alert" hidden
+       data-network-message="{% trans 'Network error. Check your connection and try again.' %}"
+       data-error-message="{% trans 'Request failed. Please try again.' %}"></div>
   {% comment %}
     Messages from the previous request, e.g. why a form that redirected didn't do what
     was asked. The view's level (warning, info, …) picks the Bootstrap alert colour.

@@ -2,4 +2,10 @@
 {% load i18n %}
 
 {% block error_title %}{% trans "Not found (404)" %}{% endblock %}
-{% block error_message %}{% trans "The requested page was not found on this server." %}{% endblock %}
+{% block error_message %}
+{% if request.htmx %}
+  {% trans "This content may have been deleted or changed since you opened the page. Please reload the page." %}
+{% else %}
+  {% trans "The requested page was not found on this server." %}
+{% endif %}
+{% endblock %}

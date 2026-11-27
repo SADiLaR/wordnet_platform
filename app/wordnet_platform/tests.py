@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.template.loader import render_to_string
 from django.test import (
     Client,
     RequestFactory,
@@ -8,7 +9,12 @@ from django.test import (
     override_settings,
 )
 from django.urls import reverse
-from django.views.defaults import bad_request, permission_denied, server_error
+from django.views.defaults import (
+    bad_request,
+    page_not_found,
+    permission_denied,
+    server_error,
+)
 
 from editor.forms import DefinitionForm
 from wordnet_platform.forms import AuthenticationForm
@@ -119,7 +125,6 @@ class LoginTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(set(response.context["form"].errors), {"username", "password"})
-        self.assertContains(response, 'class="alert alert-danger"', count=2)
         self.assertContains(response, 'class="errorlist"', count=2)
         for field in response.context["form"]:
             self.assertContains(
@@ -161,8 +166,60 @@ class ErrorPageTest(SimpleTestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_error_messages_and_reload_option_depend_on_htmx(self):
+        cases = [
+            (
+                403,
+                permission_denied,
+                "You do not have permission to access this page.",
+                (
+                    "Your permissions may have changed since you opened the page. "
+                    "Please reload the page."
+                ),
+            ),
+            (
+                404,
+                page_not_found,
+                "The requested page was not found on this server.",
+                (
+                    "This content may have been deleted or changed since you opened "
+                    "the page. Please reload the page."
+                ),
+            ),
+        ]
+        for status, handler, normal_message, htmx_message in cases:
+            for htmx, message in ((False, normal_message), (True, htmx_message)):
+                with self.subTest(status=status, htmx=htmx):
+                    self.request.htmx = htmx
+                    response = handler(self.request, Exception())
+                    self.assertContains(response, message, status_code=status)
+                    self.assertContains(
+                        response, "Reload page", count=int(htmx), status_code=status
+                    )
+
     def test_server_error_uses_custom_500_page(self):
         with self.assertTemplateUsed("500.html"):
             response = server_error(self.request)
 
         self.assertEqual(response.status_code, 500)
+        self.assertNotContains(response, "Reload page", status_code=500)
+        self.assertContains(response, "<!DOCTYPE html>", status_code=500)
+        self.assertContains(response, "Internal Server Error (500)", status_code=500)
+        self.assertContains(
+            response,
+            "Something unexpected prevented the server from fulfilling the request.",
+            status_code=500,
+        )
+
+    def test_explicit_custom_error_content_is_escaped(self):
+        html = render_to_string(
+            "base_error.html",
+            {
+                "error_title": "Cannot <create>",
+                "error_message": "You can't create this while <X>.",
+            },
+        )
+
+        self.assertInHTML("<h1>Cannot &lt;create&gt;</h1>", html)
+        self.assertIn("while &lt;X&gt;.", html)
+        self.assertNotIn("<X>", html)

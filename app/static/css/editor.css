@@ -211,3 +211,15 @@ code {
 .inline-form:focus-within .inline-actions {
   display: block;
 }
+
+/* Shared error content stays compact inside the request alert only. */
+#request-error h1 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+#request-error .lead {
+  font-size: inherit;
+  font-weight: inherit;
+  margin-bottom: 0;
+}

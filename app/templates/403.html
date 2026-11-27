@@ -2,4 +2,10 @@
 {% load i18n %}
 
 {% block error_title %}{% trans "Forbidden (403)" %}{% endblock %}
-{% block error_message %}{% trans "You do not have permission to access this page." %}{% endblock %}
+{% block error_message %}
+{% if request.htmx %}
+  {% trans "Your permissions may have changed since you opened the page. Please reload the page." %}
+{% else %}
+  {% trans "You do not have permission to access this page." %}
+{% endif %}
+{% endblock %}

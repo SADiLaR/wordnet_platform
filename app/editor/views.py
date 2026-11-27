@@ -173,7 +173,7 @@ def _synset_examples(synset):
     return synset.synsetexample_set.exclude(text="").order_by("text", "pk")
 
 
-QUEUE_PAGE_SIZE = 20
+WORK_LIST_PAGE_SIZE = 20
 
 
 def _with_query(path, params):
@@ -182,7 +182,7 @@ def _with_query(path, params):
 
 
 @require_GET
-def assignment_queue(request):
+def work_list(request):
     """The user's own assignments, in two tabs: open work, and what they've done.
 
     The tab is a URL parameter, so each tab is its own page, with its own pagination,
@@ -199,7 +199,7 @@ def assignment_queue(request):
         # Oldest first: the work that has waited longest
         assignments = assignments.order_by("created_at", "pk")
     f = AssignmentFilter(request.GET, queryset=assignments)
-    page_obj = Paginator(f.qs, QUEUE_PAGE_SIZE).get_page(request.GET.get("page"))
+    page_obj = Paginator(f.qs, WORK_LIST_PAGE_SIZE).get_page(request.GET.get("page"))
 
     # For the pagination's links, which add the page number
     url_params = request.GET.copy()
@@ -217,7 +217,7 @@ def assignment_queue(request):
         "todo_url": _with_query(request.path, filter_params),
         "done_url": _with_query(request.path, done_params),
     }
-    return render(request, "editor/assignment_queue.html", context)
+    return render(request, "editor/work_list.html", context)
 
 
 @require_http_methods(["GET", "POST"])

@@ -189,8 +189,8 @@ ADMINS = [
 ]
 
 LOGIN_URL = "login"
-# People start from their queue
-LOGIN_REDIRECT_URL = "editor:assignment_queue"
+# People start from their work list
+LOGIN_REDIRECT_URL = "editor:work_list"
 LOGOUT_REDIRECT_URL = "/"
 
 # Password validation

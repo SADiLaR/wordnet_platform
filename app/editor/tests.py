@@ -2538,7 +2538,7 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
 
 
-class AssignmentQueueTest(TestCase):
+class WorkListTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="testuser")
         self.assigner = User.objects.create_user(username="assigner")
@@ -2550,7 +2550,7 @@ class AssignmentQueueTest(TestCase):
             name="'n Ander Toets Wordnet", language=language
         )
         self.pos = PartOfSpeech.objects.create(name="noun")
-        self.url = reverse("editor:assignment_queue")
+        self.url = reverse("editor:work_list")
 
     def _synset(self, display_name, status=Synset.Status.DRAFT, wordnet=None):
         return Synset.objects.create(
@@ -2846,7 +2846,7 @@ class AssignmentModelTest(TestCase):
         ).full_clean()  # Valid: doesn't raise.
 
     def test_several_people_can_have_the_same_work(self):
-        # Only starting work locks a synset, so having it in a queue is no claim.
+        # Only starting work locks a synset, so having it in a work list is no claim.
         Assignment.objects.create(
             user=self.user,
             assigner=self.user,

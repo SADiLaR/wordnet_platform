@@ -1,7 +1,7 @@
 {% load i18n %}
 {% comment %}
-The synset, status and goal cells of a row in the queue's tables. A copy that hasn't
-been created yet shows its source synset, with the wordnet to copy it into.
+The synset, status and goal cells of a row in the work list's tables. A copy that
+hasn't been created yet shows its source synset, with the wordnet to copy it into.
 {% endcomment %}
 {% with synset=assignment.target_synset %}
   {% if synset %}

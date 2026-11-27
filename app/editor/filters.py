@@ -90,7 +90,7 @@ class SynsetFilter(django_filters.FilterSet):
 
 
 class AssignmentFilter(django_filters.FilterSet):
-    """Filters for the queue page, shown in the same sidebar as the browse page's."""
+    """Filters for the work list page, shown in the same sidebar as the browse page's."""
 
     # Named "wordnet", as on the browse page, rather than after the field.
     wordnet = ModelMultipleChoiceFilter(

@@ -19,9 +19,7 @@
             <a
                 href="{% url 'editor:synset_detail' pk=copy.pk %}"
             >{{ copy.short_display_name }}</a>
-            <span class="badge badge-status status-{{ copy.status }}">
-              {{ copy.get_status_display }}
-            </span>
+            {% include "editor/snippets/_status_badge.html" with synset=copy %}
             {# Not linked: found by its Princeton ID. The same pill as on the source card #}
             {% if not copy.copied_from_id %}
               <span

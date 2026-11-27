@@ -1,0 +1,15 @@
+{% load i18n %}
+{# What an open assignment needs next, in words #}
+{% if not assignment.target_synset %}
+  {% trans "The copy hasn’t been created yet." %}
+{% elif assignment.goal_reached %}
+  {% if assignment.goal == assignment.Goal.TO_REVIEW %}
+    {% trans "The synset is reviewed." %}
+  {% else %}
+    {% trans "The synset is complete." %}
+  {% endif %}
+{% elif assignment.goal == assignment.Goal.TO_REVIEW %}
+  {% trans "Set the synset to reviewed first." %}
+{% else %}
+  {% trans "Set the synset to complete first." %}
+{% endif %}

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth.models import User
@@ -331,14 +332,6 @@ class EditorViewTest(TestCase):
     def _get_browse_url(self):
         return reverse("editor:browse_synsets")
 
-    def _get_queue_url(self):
-        return reverse("editor:assignment_queue")
-
-    def _get_queue_wn_url(self):
-        return reverse(
-            "editor:assignment_queue_by_wordnet", kwargs={"wn_pk": self.wordnet.pk}
-        )
-
     def _get_synset_detail_url(self, synset_obj):
         return reverse("editor:synset_detail", kwargs={"pk": synset_obj.pk})
 
@@ -393,6 +386,13 @@ class EditorViewTest(TestCase):
         # synset_e's Source column, since synset_e was copied from it
         self.assertContains(
             response, f'href="{self._get_synset_detail_url(self.synset_d)}"', count=2
+        )
+        # Browse has two Reset buttons: one beside the search box, and one under the
+        # filters, from the shared layout. Both link to this page without the filters.
+        self.assertInHTML(
+            f'<a href="{self._get_browse_url()}" class="btn btn-secondary">Reset</a>',
+            response.content.decode(),
+            count=2,
         )
 
     def test_synsets_wordnet_filter(self):
@@ -505,23 +505,6 @@ class EditorViewTest(TestCase):
         qs = synset_filter.qs
         self.assertEqual(qs.count(), 1)
         self.assertIn(self.synset_a, qs)
-
-    def test_queue_by_wordnet_existing(self):
-        with self.assertNumQueries(LOGIN_QUERIES + 2):
-            response = self.client.get(self._get_queue_wn_url())
-        self.assertEqual(response.status_code, 200)
-
-    def test_queue_by_wordnet_non_existing(self):
-        nonexist_url = reverse(
-            "editor:assignment_queue_by_wordnet", kwargs={"wn_pk": 99999}
-        )
-        response = self.client.get(nonexist_url)
-        self.assertEqual(response.status_code, 404)
-
-    def test_queue_existing(self):
-        with self.assertNumQueries(LOGIN_QUERIES + 1):
-            response = self.client.get(self._get_queue_url())
-        self.assertEqual(response.status_code, 200)
 
     def _html_elements(self, root):
         """Every element in the tree under `root` (from parse_html), root included."""
@@ -2555,6 +2538,167 @@ class EditorViewTest(TestCase):
         self.assertEqual(self.synset_b.status, Synset.Status.DRAFT)
 
 
+class WorkListTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser")
+        self.assigner = User.objects.create_user(username="assigner")
+        self.client.force_login(self.user)
+
+        language = Language.objects.create(iso_code="afr", name="Afrikaans")
+        self.wordnet = Wordnet.objects.create(name="Toets Wordnet", language=language)
+        self.wordnet_2 = Wordnet.objects.create(
+            name="'n Ander Toets Wordnet", language=language
+        )
+        self.pos = PartOfSpeech.objects.create(name="noun")
+        self.url = reverse("editor:work_list")
+
+    def _synset(self, display_name, status=Synset.Status.DRAFT, wordnet=None):
+        return Synset.objects.create(
+            display_name=display_name,
+            definition="'n Toets synset",
+            wordnet=wordnet or self.wordnet,
+            pos=self.pos,
+            status=status,
+        )
+
+    def _assign(self, user=None, **kwargs):
+        if "target_synset" in kwargs:
+            kwargs.setdefault("target_wordnet", kwargs["target_synset"].wordnet)
+        return Assignment.objects.create(
+            user=user or self.user, assigner=self.assigner, **kwargs
+        )
+
+    def _set_dates(self, assignment, **dates):
+        """Set dates that the model sets itself, e.g. created_at (auto_now_add)."""
+        Assignment.objects.filter(pk=assignment.pk).update(**dates)
+
+    def _days_ago(self, days):
+        return timezone.now() - timedelta(days=days)
+
+    def test_lists_only_own_open_work_oldest_first(self):
+        newer = self._assign(target_synset=self._synset("nuwer"))
+        older = self._assign(target_synset=self._synset("ouer"))
+        self._set_dates(newer, created_at=self._days_ago(1))
+        self._set_dates(older, created_at=self._days_ago(2))
+        other_user = User.objects.create_user(username="otheruser")
+        self._assign(user=other_user, target_synset=self._synset("iemand anders s'n"))
+        self._assign(target_synset=self._synset("klaar"), done_at=timezone.now())
+
+        # Queries:
+        # LOGIN_QUERIES
+        # count the open assignments, for the pagination
+        # fetch the page of open assignments, with their synsets and wordnets
+        # list the wordnets, for the filters
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
+            response = self.client.get(self.url)
+
+        self.assertQuerySetEqual(
+            response.context["page_obj"].object_list, [older, newer]
+        )
+        # Filtering from this tab stays on it: no hidden field for the Done tab
+        self.assertNotContains(response, 'name="tab"')
+        # The shared layout's Reset is the same page, without the filters
+        self.assertInHTML(
+            f'<a href="{self.url}" class="btn btn-secondary">Reset</a>',
+            response.content.decode(),
+        )
+
+    def test_copy_not_yet_created_shows_source(self):
+        source = self._synset("bron", wordnet=self.wordnet_2)
+        self._assign(source_synset=source, target_wordnet=self.wordnet)
+
+        # Queries: as in test_lists_only_own_open_work_oldest_first. The row's
+        # source synset and target wordnet come with the assignment, not lazily.
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
+            response = self.client.get(self.url)
+
+        self.assertContains(response, f'href="{source.get_absolute_url()}"')
+        self.assertContains(response, "To copy into Toets Wordnet")
+        self.assertContains(response, "The copy hasn’t been created yet.")
+
+    def test_next_step(self):
+        # One row per case. The rule itself is tested in AssignmentModelTest.
+        self._assign(target_synset=self._synset("konsep"))
+        self._assign(
+            target_synset=self._synset("voltooi", status=Synset.Status.COMPLETE)
+        )
+        self._assign(
+            target_synset=self._synset("na te gaan", status=Synset.Status.COMPLETE),
+            goal=Assignment.Goal.TO_REVIEW,
+        )
+        self._assign(
+            target_synset=self._synset("nagegaan", status=Synset.Status.REVIEWED),
+            goal=Assignment.Goal.TO_REVIEW,
+        )
+
+        # Queries: as in test_lists_only_own_open_work_oldest_first. Checking the
+        # goal for each row uses the synset fetched with the assignment.
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
+            response = self.client.get(self.url)
+
+        self.assertContains(response, "Set the synset to complete first.", count=1)
+        self.assertContains(response, "The synset is complete.", count=1)
+        self.assertContains(response, "Set the synset to reviewed first.", count=1)
+        self.assertContains(response, "The synset is reviewed.", count=1)
+
+    def test_done_tab_lists_done_work_most_recent_first(self):
+        earlier = self._assign(target_synset=self._synset("vroeër klaar"))
+        recent = self._assign(target_synset=self._synset("onlangs klaar"))
+        self._set_dates(earlier, done_at=self._days_ago(2))
+        self._set_dates(recent, done_at=self._days_ago(1))
+        self._assign(target_synset=self._synset("oop"))
+
+        # Queries: as in test_lists_only_own_open_work_oldest_first, for done work
+        with self.assertNumQueries(LOGIN_QUERIES + 3):
+            response = self.client.get(self.url, {"tab": "done"})
+
+        self.assertQuerySetEqual(
+            response.context["page_obj"].object_list, [recent, earlier]
+        )
+        # Filtering from this tab stays on it
+        self.assertInHTML(
+            '<input type="hidden" name="tab" value="done">', response.content.decode()
+        )
+
+    def test_filters(self):
+        wanted = self._assign(
+            target_synset=self._synset("gesoek"), goal=Assignment.Goal.TO_REVIEW
+        )
+        # A copy not yet created is found by the wordnet it's to be copied into
+        copy = self._assign(
+            source_synset=self._synset("bron", wordnet=self.wordnet_2),
+            target_wordnet=self.wordnet,
+            goal=Assignment.Goal.TO_REVIEW,
+        )
+        # Another goal
+        self._assign(target_synset=self._synset("voltooi"))
+        # Another wordnet
+        self._assign(
+            target_synset=self._synset("ander", wordnet=self.wordnet_2),
+            goal=Assignment.Goal.TO_REVIEW,
+        )
+        filters = {"wordnet": [str(self.wordnet.pk)], "goal": ["review"]}
+
+        # Queries:
+        # LOGIN_QUERIES
+        # fetch the ticked wordnet, to check it's a choice
+        # then as in test_lists_only_own_open_work_oldest_first
+        with self.assertNumQueries(LOGIN_QUERIES + 4):
+            response = self.client.get(self.url, {**filters, "page": "1"})
+
+        self.assertQuerySetEqual(
+            response.context["page_obj"].object_list, [wanted, copy]
+        )
+        # Both tabs keep the filters, and start from the first page
+        self.assertEqual(
+            parse_qs(urlsplit(response.context["todo_url"]).query), filters
+        )
+        self.assertEqual(
+            parse_qs(urlsplit(response.context["done_url"]).query),
+            {**filters, "tab": ["done"]},
+        )
+
+
 class AssignmentModelTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="testuser")
@@ -2572,6 +2716,39 @@ class AssignmentModelTest(TestCase):
         self.synset_b = Synset.objects.create(
             definition="Another test synset", wordnet=self.wordnet, pos=pos
         )
+
+    def test_goal_reached(self):
+        synset = self.synset_a
+        to_complete = Assignment(
+            user=self.user, assigner=self.assigner, target_synset=synset
+        )
+        to_review = Assignment(
+            user=self.user,
+            assigner=self.assigner,
+            target_synset=synset,
+            goal=Assignment.Goal.TO_REVIEW,
+        )
+        # (status, reached for "to complete", reached for "to review")
+        cases = [
+            (Synset.Status.STUB, False, False),
+            (Synset.Status.DRAFT, False, False),
+            (Synset.Status.COMPLETE, True, False),
+            (Synset.Status.REVIEWED, True, True),
+        ]
+        for status, complete_reached, review_reached in cases:
+            with self.subTest(status=status):
+                synset.status = status
+                self.assertIs(to_complete.goal_reached(), complete_reached)
+                self.assertIs(to_review.goal_reached(), review_reached)
+
+    def test_copy_not_yet_created_reaches_no_goal(self):
+        copy = Assignment(
+            user=self.user,
+            assigner=self.assigner,
+            source_synset=self.synset_a,
+            target_wordnet=self.wordnet_2,
+        )
+        self.assertIs(copy.goal_reached(), False)
 
     def test_clean_on_assignment(self):
         no_target_synset = Assignment(
@@ -2669,7 +2846,7 @@ class AssignmentModelTest(TestCase):
         ).full_clean()  # Valid: doesn't raise.
 
     def test_several_people_can_have_the_same_work(self):
-        # Only starting work locks a synset, so having it in a queue is no claim.
+        # Only starting work locks a synset, so having it in a work list is no claim.
         Assignment.objects.create(
             user=self.user,
             assigner=self.user,

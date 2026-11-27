@@ -1,0 +1,94 @@
+{% extends "editor/filtered_list.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Work list" %} — {% trans "AfWN Editor" %}{% endblock %}
+
+{% block header %}
+<h1 class="h4 mb-3">{% trans "Work list" %}</h1>
+{# Links, not script-driven tabs: each tab is its own page, with its own pagination #}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a
+        href="{{ todo_url }}"
+        {% if show_done %}
+          class="nav-link"
+        {% else %}
+          class="nav-link active"
+          aria-current="page"
+        {% endif %}
+    >{% trans "To do" %}</a>
+  </li>
+  <li class="nav-item">
+    <a
+        href="{{ done_url }}"
+        {% if show_done %}
+          class="nav-link active"
+          aria-current="page"
+        {% else %}
+          class="nav-link"
+        {% endif %}
+    >{% trans "Done" %}</a>
+  </li>
+</ul>
+{% endblock %}
+
+{% block results %}
+  {# So that filtering stays on this tab #}
+  {% if show_done %}
+    <input
+        type="hidden"
+        name="tab"
+        value="done"
+    >
+  {% endif %}
+  {% if page_obj.paginator.count %}
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>{% trans "Synset" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Goal" %}</th>
+          {% if show_done %}
+            <th>{% trans "Done" %}</th>
+          {% else %}
+            <th>{% trans "Assigned" %}</th>
+            <th>{% trans "Next step" %}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for assignment in page_obj %}
+          <tr>
+            {% include "editor/snippets/_assignment_synset_cells.html" %}
+            {% if show_done %}
+              <td>
+                <time datetime="{{ assignment.done_at|date:'c' }}">
+                  {{ assignment.done_at|date }}
+                </time>
+              </td>
+            {% else %}
+              <td>
+                <time datetime="{{ assignment.created_at|date:'c' }}">
+                  {{ assignment.created_at|date }}
+                </time>
+              </td>
+              <td>{% include "editor/snippets/_assignment_next_step.html" %}</td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% include "editor/browse/_pagination.html" %}
+  {% elif show_done %}
+    <p class="text-secondary">{% trans "Nothing done yet." %}</p>
+  {% else %}
+    <p class="text-secondary">{% trans "No open assignments." %}</p>
+  {% endif %}
+{% endblock %}
+
+{% block filters %}
+  {% with form=filter.form %}
+    {% include "editor/browse/_search_filter.html" with field=form.wordnet summary=_("Filter by wordnet") %}
+    {% include "editor/browse/_search_filter.html" with field=form.goal summary=_("Filter by goal") %}
+  {% endwith %}
+{% endblock %}

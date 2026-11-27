@@ -7,6 +7,8 @@ from django_filters import ModelMultipleChoiceFilter, MultipleChoiceFilter
 
 from lex.models import PartOfSpeech, Sense, Synset, Wordnet
 
+from .models import Assignment
+
 MIN_DEFINITION_SEARCH_LENGTH = 4
 
 
@@ -85,3 +87,27 @@ class SynsetFilter(django_filters.FilterSet):
 
     def ignore(self, queryset, name, value):
         return queryset
+
+
+class AssignmentFilter(django_filters.FilterSet):
+    """Filters for the work list page, shown in the same sidebar as the browse page's."""
+
+    # Named "wordnet", as on the browse page, rather than after the field.
+    wordnet = ModelMultipleChoiceFilter(
+        field_name="target_wordnet",
+        label=_("Wordnet"),
+        queryset=Wordnet.objects.all().order_by("name"),
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        distinct=False,
+    )
+
+    goal = MultipleChoiceFilter(
+        label=_("Goal"),
+        choices=Assignment.Goal.choices,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        distinct=False,
+    )
+
+    class Meta:
+        model = Assignment
+        fields = ["wordnet", "goal"]

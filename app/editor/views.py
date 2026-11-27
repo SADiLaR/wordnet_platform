@@ -30,8 +30,9 @@ from lex.models import (
     Wordnet,
 )
 
-from .filters import SynsetFilter, make_search_qs
+from .filters import AssignmentFilter, SynsetFilter, make_search_qs
 from .forms import DefinitionForm, NewSynsetForm, SenseExampleForm
+from .models import Assignment
 
 
 @login_not_required
@@ -172,13 +173,51 @@ def _synset_examples(synset):
     return synset.synsetexample_set.exclude(text="").order_by("text", "pk")
 
 
-def assignment_queue(request, wn_pk=None):
-    wordnets = Wordnet.objects.all()
-    context = {"wordnets": wordnets}
-    if wn_pk:
-        wordnet_obj = get_object_or_404(Wordnet, pk=wn_pk)
-        context["wordnet"] = wordnet_obj
-    return render(request, "editor/assignment_queue.html", context)
+WORK_LIST_PAGE_SIZE = 20
+
+
+def _with_query(path, params):
+    """The path with the parameters as its query string, if there are any."""
+    return f"{path}?{params.urlencode()}" if params else path
+
+
+@require_GET
+def work_list(request):
+    """The user's own assignments, in two tabs: open work, and what they've done.
+
+    The tab is a URL parameter, so each tab is its own page, with its own pagination,
+    and the filters apply to the tab that is showing.
+    """
+    show_done = request.GET.get("tab") == "done"
+    assignments = Assignment.objects.filter(
+        user=request.user, done_at__isnull=not show_done
+    ).select_related("target_synset", "source_synset", "target_wordnet")
+    if show_done:
+        # The most recently done first
+        assignments = assignments.order_by("-done_at", "-pk")
+    else:
+        # Oldest first: the work that has waited longest
+        assignments = assignments.order_by("created_at", "pk")
+    f = AssignmentFilter(request.GET, queryset=assignments)
+    page_obj = Paginator(f.qs, WORK_LIST_PAGE_SIZE).get_page(request.GET.get("page"))
+
+    # For the pagination's links, which add the page number
+    url_params = request.GET.copy()
+    url_params.pop("page", None)
+    # The tabs keep the filters, and start from the first page
+    filter_params = url_params.copy()
+    filter_params.pop("tab", None)
+    done_params = filter_params.copy()
+    done_params["tab"] = "done"
+    context = {
+        "filter": f,
+        "page_obj": page_obj,
+        "show_done": show_done,
+        "url_params": url_params.urlencode(),
+        "todo_url": _with_query(request.path, filter_params),
+        "done_url": _with_query(request.path, done_params),
+    }
+    return render(request, "editor/work_list.html", context)
 
 
 @require_http_methods(["GET", "POST"])

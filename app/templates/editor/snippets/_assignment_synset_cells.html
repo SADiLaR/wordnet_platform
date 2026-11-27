@@ -1,0 +1,30 @@
+{% load i18n %}
+{% comment %}
+The synset, status and goal cells of a row in the work list's tables. A copy that
+hasn't been created yet shows its source synset, with the wordnet to copy it into.
+{% endcomment %}
+{% with synset=assignment.target_synset %}
+  {% if synset %}
+    <td>
+      <a
+          href="{{ synset.get_absolute_url }}"
+          class="link-body-emphasis text-decoration-none"
+      >{{ synset }}</a>
+    </td>
+    <td>{% include "editor/snippets/_status_badge.html" %}</td>
+  {% else %}
+    <td>
+      <a
+          href="{{ assignment.source_synset.get_absolute_url }}"
+          class="link-body-emphasis text-decoration-none"
+      >{{ assignment.source_synset }}</a>
+      <div class="small text-secondary">
+        {% blocktrans trimmed with wordnet=assignment.target_wordnet %}
+          To copy into {{ wordnet }}
+        {% endblocktrans %}
+      </div>
+    </td>
+    <td>—</td>
+  {% endif %}
+{% endwith %}
+<td>{{ assignment.get_goal_display }}</td>

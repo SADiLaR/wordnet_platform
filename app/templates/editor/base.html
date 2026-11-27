@@ -31,7 +31,7 @@
 
 
 <nav class="navbar navbar-expand-md navbar-dark bg-primary px-3">
-  <a class="navbar-brand" href="{% url 'editor:assignment_queue' %}">{% trans "AfWN Editor" %}</a>
+  <a class="navbar-brand" href="{% url 'editor:work_list' %}">{% trans "AfWN Editor" %}</a>
   <button class="navbar-toggler" type="button"
           data-bs-toggle="collapse" data-bs-target="#navMain"
           aria-controls="navMain" aria-expanded="false" aria-label="{% trans 'Toggle navigation' %}">
@@ -39,7 +39,7 @@
   </button>
   <div class="collapse navbar-collapse" id="navMain">
     <div class="navbar-nav me-auto">
-      <a class="nav-link" href="{% url 'editor:assignment_queue' %}">{% trans "Queue" %}</a>
+      <a class="nav-link" href="{% url 'editor:work_list' %}">{% trans "Work list" %}</a>
       <a class="nav-link" href="{% url 'editor:browse_synsets' %}">{% trans "Browse" %}</a>
     </div>
   </div>

@@ -189,7 +189,8 @@ ADMINS = [
 ]
 
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "/"
+# People start from their work list
+LOGIN_REDIRECT_URL = "editor:work_list"
 LOGOUT_REDIRECT_URL = "/"
 
 # Password validation

@@ -71,12 +71,12 @@ class LoginTest(TestCase):
     def test_editor_forms_keep_default_rendering(self):
         self.assertNotIn('class="mb-3"', DefinitionForm().as_div())
 
-    def test_login_redirects_to_front_page(self):
+    def test_login_redirects_to_work_list(self):
         response = self.client.post(
             reverse("login"), {"username": "testuser", "password": "password"}
         )
 
-        self.assertRedirects(response, reverse("editor:front_page"))
+        self.assertRedirects(response, reverse("editor:work_list"))
         self.assertEqual(self.client.session["_auth_user_id"], str(self.user.pk))
 
     def test_login_preserves_next_redirect(self):
@@ -106,7 +106,8 @@ class LoginTest(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("editor:front_page"))
+        # Ignores the other site, and goes to the work list as without "next"
+        self.assertRedirects(response, reverse("editor:work_list"))
 
     def test_invalid_credentials_show_errors(self):
         response = self.client.post(

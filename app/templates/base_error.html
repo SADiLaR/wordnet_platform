@@ -4,8 +4,14 @@
 {% block title %}{% trans "Error" %}{% endblock %}
 
 {% block content %}
+{# Explicit view-supplied values are escaped normally; never use exception text. #}
 <div class="text-center py-5">
-  <h1>{% block error_title %}{% endblock %}</h1>
-  <p class="lead">{% block error_message %}{% endblock %}</p>
+  <div id="request-error-content">
+    <h1>{% block error_title %}{{ error_title }}{% endblock %}</h1>
+    <p class="lead">{% block error_message %}{{ error_message }}{% endblock %}</p>
+    {% if request.htmx %}
+      <a href="" class="btn btn-sm btn-outline-danger mt-2">{% trans "Reload page" %}</a>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

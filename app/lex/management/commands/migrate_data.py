@@ -1,13 +1,14 @@
 import csv
 import json
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
-from difflib import SequenceMatcher
 from html import unescape
 from itertools import batched
 from pathlib import Path
 
+import edlib
 import pymysql
 from django.core.management.base import BaseCommand
 
@@ -271,131 +272,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def clean_example(value):
-        if value is None:
-            return ""
-
-        text = unescape(value)
-        text = re.compile('["“”]').sub("", text)
-        text = " ".join(text.split())
-
-        return text.strip(";: ")
-
-    @staticmethod
-    def normalize_relation_name(name):
-
-        relation_prefixes = ("awn_", "pwn_")
-        relation_name_aliases = {
-            "holo_mem": "holo_member",
-            "mero_mem": "mero_member",
-            "causes": "cause",
-            "sim": "similar_to",
-            "has_hyperonym": "hyper",
-        }
-
-        if name.lower().startswith(relation_prefixes):
-            name = name[4:]
-
-        name = re.compile(r"\s*:\s*").sub("_", name)
-
-        return relation_name_aliases.get(name, name)
-
-    def insert_batch(self, stage, model, batch):
-        """
-        batch: list of (row, obj, context) tuples.
-
-        Inserts the batch with one query. If that fails, retries row by row
-        so only the "bad rows" are logged and skipped.
-        """
-        try:
-            model.objects.bulk_create([obj for _, obj, _ in batch])
-            self.record_migrated(stage, len(batch))
-            return [(row, obj) for row, obj, _ in batch]
-
-        except Exception:
-            pass
-
-        inserted = []
-
-        for row, obj, context in batch:
-            # reset the object before retrying
-            obj.pk = None
-            obj._state.adding = True
-
-            try:
-                model.objects.bulk_create([obj])
-
-            except Exception as e:
-                self.log_skip(
-                    stage=stage,
-                    reason="db_upload_error",
-                    row=row,
-                    error=e,
-                    context=context,
-                )
-                continue
-
-            inserted.append((row, obj))
-        self.record_migrated(stage, len(inserted))
-
-        return inserted
-
-    @staticmethod
-    def update_synset_display_names():
-        """
-        The migration inserts synsets with bulk_create(), which skips save() so
-        update_display_name method is never triggered and every synset would keep
-        display_name = "".
-        """
-        print("Updating synset display names...")
-        count = 0
-
-        synsets = Synset.objects.filter(sense__isnull=False).distinct()
-        for count, synset in enumerate(synsets.iterator(), start=1):
-            synset.update_display_name()
-            if count % 10_000 == 0:
-                print(f"  Updated {count} synsets...")
-
-        print(f"Updated display names for {count} synsets")
-
-    def update_relation_display_names(self):
-        """
-        Fill Relation.display_name for every migrated relation.
-        The migration inserts relations with bulk_create(), which skips save() so
-        display_name is not updated.
-        """
-        print("Updating relation display names...")
-        count = 0
-
-        relations = Relation.objects.select_related(
-            "synset_from", "synset_to", "type"
-        ).iterator()
-
-        for count, relation in enumerate(relations, start=1):
-            try:
-                # Runs save() to build display_name without adding a history row
-                relation.save_without_historical_record()
-
-            except Exception as e:
-                self.log_skip(
-                    stage="relation_display_names",
-                    reason="display_name_not_saved",
-                    error=e,
-                    context={
-                        "relation_id": relation.pk,
-                        "display_name": relation.display_name,
-                        "length": len(relation.display_name),
-                    },
-                )
-                continue
-
-            if count % 50_000 == 0:
-                print(f"  Updated {count} relations...")
-
-        print(f"Updated display names for {count} relations")
-
-    @staticmethod
-    def clean_example(value):
-        if value is None:
+        if value is None or value == "None;":
             return ""
 
         text = unescape(str(value))
@@ -561,63 +438,75 @@ class Command(BaseCommand):
         return parts, "split_word"
 
     @staticmethod
-    def word_in_sentence(word, sentence, threshold=0.75, min_overlap=4):
-        word_re = re.compile(r"[-\w']+")
+    def plain(text):
+        # Without accents, so "setimêla" matches "setimela"
+        text = unicodedata.normalize("NFD", text.lower())
+        return "".join(c for c in text if not unicodedata.combining(c))
 
-        word_tokens = word_re.findall(word.lower())
-        sentence_tokens = word_re.findall(sentence.lower())
+    @classmethod
+    def word_in_sentence(cls, word, sentence, fuzzy_min_len=6):
+        """
+        "exact":  the word, or a phrase as consecutive words, is in the sentence.
+        "phrase": every word of a phrase is in the sentence, with other words
+                  between them or in another order, e.g. "write off" in
+                  "write it off".
+        "close":  a single word is inside a sentence with at most 1 letter different
+        None:     not found.
+        """
+        # Ignore notes in brackets: "makala (n'wana)" is matched as "makala"
+        word = re.sub(r"\([^)]*\)", " ", word)
+        word_re = re.compile(r"[-\w']+")
+        word_tokens = word_re.findall(cls.plain(word))
+        sentence_tokens = word_re.findall(cls.plain(sentence))
 
         # Exact word, or exact phrase
         size = len(word_tokens)
-        if all(token in sentence_tokens for token in word_tokens):
-            return "yes"
+        if any(
+            sentence_tokens[i : i + size] == word_tokens
+            for i in range(len(sentence_tokens) - size + 1)
+        ):
+            return "exact"
 
-        for word_token in word_tokens:
-            if len(word_token) < min_overlap:
-                continue
+        # A phrase whose words are all in the sentence, with other words
+        # between them or in another order: "write it off"
+        if size > 1:
+            if all(token in sentence_tokens for token in word_tokens):
+                return "phrase"
+            return None
 
-            for sentence_token in sentence_tokens:
-                match = SequenceMatcher(
-                    None,
-                    word_token,
-                    sentence_token,
-                    autojunk=False,
-                ).find_longest_match(0, len(word_token), 0, len(sentence_token))
-                if (
-                    match.size >= min_overlap
-                    and match.size / len(word_token) >= threshold
-                ):
-                    return "maybe"
+        token = word_tokens[0]
 
-        return "no"
+        if len(token) >= fuzzy_min_len and any(
+            edlib.align(token, sentence_token, mode="HW", k=1)["editDistance"] <= 1
+            for sentence_token in sentence_tokens
+        ):
+            return "close"
+
+        return None
 
     def best_match(self, ids_list, sentence):
         """
-        Return the id whose word the sentence clearly uses.
+        Return the id whose word the sentence uses:
+        An exact match wins. If there is none, a close match is used. If two or
+        more words match at the same level, no id is chosen.
         """
         results = {
             id: (word, self.word_in_sentence(word, sentence)) for id, word in ids_list
         }
 
-        found = [id for id, (_, result) in results.items() if result == "yes"]
+        for level in ("exact", "phrase", "close"):
+            found = [id for id, (_, result) in results.items() if result == level]
 
-        if len(found) > 1:
-            return None, "several_words_found", results
+            if len(found) == 1:
+                return found[0], "moved", results
+            if len(found) > 1:
+                return None, "several_words_found", results
 
-        if not found:
-            return None, "no_word_found", results
-
-        if any(
-            result == "maybe" for id, (_, result) in results.items() if id != found[0]
-        ):
-            return None, "possible_other_word", results
-
-        return found[0], "moved", results
+        return None, "no_word_found", results
 
     def best_sense(self, synset_id, sentence):
         """
-        Return the sense to move the example to when exactly one word
-        appears in the sentence and all other words clearly do not.
+        Return the sense to move the example to (if any).
         """
         senses = self.senses_by_synset.get(synset_id)
 
@@ -1229,7 +1118,14 @@ class Command(BaseCommand):
 
         self.write_csv(
             "review_synset_examples_to_sense.csv",
-            ["synset_id", "decision", "moved_to_sense_id", "word_results", "example"],
+            [
+                "synset_id",
+                "decision",
+                "moved_to_sense_id",
+                "word_results",
+                "needs_review",
+                "example",
+            ],
             self.moved_example_rows,
         )
 
@@ -1329,6 +1225,8 @@ class Command(BaseCommand):
                             "; ".join(
                                 f"{word}: {result}" for word, result in results.values()
                             ),
+                            sense_id is not None
+                            and results[sense_id][1] in ("phrase", "close"),
                             example_text,
                         ]
                     )
